@@ -60,7 +60,7 @@ jobs:
           docker run --rm -v "$PWD":/project papermario-3ds-builder \
             bash -c 'cd /project && python3 port/3ds/tools/check_undef_syms.py port/3ds/PaperMario3DS.elf'
       - name: Upload .3dsx artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: PaperMario3DS-3dsx
           path: port/3ds/PaperMario3DS.3dsx
