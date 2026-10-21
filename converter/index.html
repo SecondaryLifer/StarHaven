@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Star Haven Save Converter</title>
-<meta name="description" content="Convert Paper Mario N64 saves (.fla, .srm) to Star Haven for 3DS and back. Runs in your browser; nothing is uploaded.">
+<meta name="description" content="Convert Paper Mario N64 saves (.fla, .srm) and Paperboat saves to Star Haven for 3DS and back. Runs in your browser; nothing is uploaded.">
 <style>
   :root {
     --bg-top: #f7c46c; --bg-bottom: #e0843a;
@@ -57,15 +57,15 @@
 <main>
   <div class="panel">
     <h1>Star Haven Save Converter</h1>
-    <p class="sub">Paper Mario N64 saves to <a href="https://github.com/SecondaryLifer/StarHaven">Star Haven</a> (3DS) and back. Everything happens in your browser, nothing is uploaded.</p>
+    <p class="sub">Paper Mario N64 and Paperboat (PC) saves to <a href="https://github.com/SecondaryLifer/StarHaven">Star Haven</a> (3DS) and back. Everything happens in your browser, nothing is uploaded.</p>
   </div>
 
   <div class="panel">
     <label id="drop" for="file">
       <strong>Drop a save file here</strong>
-      <span>or tap to pick one: <code>.fla</code> (Project64, mupen64plus, ares, flashcarts), <code>.srm</code> (RetroArch) or a Star Haven <code>save.fla</code></span>
+      <span>or tap to pick one: <code>.fla</code> (Project64, mupen64plus, ares, flashcarts), <code>.srm</code> (RetroArch), Paperboat <code>file0.json</code> to <code>file3.json</code> (several at once) or a Star Haven <code>save.fla</code></span>
     </label>
-    <input type="file" id="file">
+    <input type="file" id="file" multiple>
     <div id="result" hidden>
       <p class="status" id="status"></p>
       <ul class="files" id="files"></ul>
@@ -88,6 +88,16 @@
     <h2>Star Haven to N64</h2>
     <p>Drop your Star Haven <code>save.fla</code> above and pick the order your emulator wants. Most use the N64 order; if your emulator shows no save, try the Project64 one. For RetroArch, load the game once, close it, and replace the last 128 KB of its <code>.srm</code>, or use an emulator that takes <code>.fla</code> files.</p>
     <p class="note">The game is the same on N64 and 3DS, so files carry over as they are. A save from the European version is best used with the European ROM, and a US save with the US ROM. Virtual Console saves need to be taken out of the console with another tool first.</p>
+  </div>
+
+  <div class="panel">
+    <h2>Paperboat</h2>
+    <p>Paperboat keeps each save file in its <code>saves</code> folder: <code>file0.json</code> is File 1, <code>file1.json</code> File 2, and so on.</p>
+    <ol>
+      <li><strong>To Star Haven:</strong> drop one or more of those files above. To keep the other files of a Star Haven save, drop your <code>save_us.fla</code> together with them; the Paperboat files replace only their own slots. Copy the new <code>save_us.fla</code> to <code>/3ds/StarHaven/</code>.</li>
+      <li><strong>To Paperboat:</strong> drop your Star Haven <code>save_us.fla</code> and download the files you want. Close Paperboat, put them in its <code>saves</code> folder, and start it again.</li>
+    </ol>
+    <p class="note" style="margin-top:10px">Paperboat is the US version, so this works with Star Haven played with the US ROM (<code>save_us.fla</code>). Paperboat can bring in N64 saves by itself.</p>
   </div>
 
   <footer>Star Haven is a fan-made 3DS port. It needs your own Paper Mario ROM.</footer>
@@ -177,6 +187,136 @@ function slots(img, ok, be) {
   }
   return [...bySlot.values()].sort((a, b) => a.slot - b.slot);
 }
+// newest block of each file slot, as {slot: block bytes}
+function newestBlocks(img, ok, be) {
+  const best = new Map();
+  for (const i of ok.filter(i => i < 6)) {
+    const o = i * STRIDE, slot = rd32(img, o + 0x38, be) & 3, count = rd32(img, o + 0x3C, be) | 0;
+    if (!best.has(slot) || best.get(slot).count < count) best.set(slot, {count, block: img.slice(o, o + SAVE_SIZE)});
+  }
+  return new Map([...best].map(([slot, b]) => [slot, b.block]));
+}
+
+// Paperboat (the PC port, US only) keeps each file as saves/file<slot>.json: SaveData by field name
+// (src/port/save/SaveManager.cpp), with the same item IDs as the N64 game. Fields in Paperboat's order
+// as [name, offset, type, count (arrays only), row length (nested arrays)]; b/B s8/u8, h/H 16-bit, i/I 32-bit.
+const P = 0x40;   // PlayerData
+const PB_FIELDS = [
+  ["saveSlot", 0x38, "i"], ["saveCount", 0x3C, "i"],
+  ...["bootsLevel", "hammerLevel", "curHP", "curMaxHP", "hardMaxHP", "curFP", "curMaxFP", "hardMaxFP", "maxBP", "level",
+    "hasActionCommands"].map((k, i) => ["player." + k, P + i, "b"]),
+  ["player.coins", P + 0x0C, "h"], ["player.starPieces", P + 0x0F, "B"], ["player.starPoints", P + 0x10, "b"],
+  ["player.curPartner", P + 0x12, "b"], ["player.partners", P + 0x14, "partners", 12],
+  ["player.keyItems", P + 0x74, "h", 32], ["player.badges", P + 0xB4, "h", 128], ["player.invItems", P + 0x1B4, "h", 10],
+  ["player.storedItems", P + 0x1C8, "h", 32], ["player.equippedBadges", P + 0x208, "h", 64],
+  ["player.merleeSpellType", P + 0x289, "b"], ["player.merleeCastsLeft", P + 0x28A, "b"], ["player.merleeTurnCount", P + 0x28C, "h"],
+  ["player.maxStarPower", P + 0x28E, "b"], ["player.starPower", P + 0x290, "h"], ["player.starBeamLevel", P + 0x292, "b"],
+  ...["actionCommandAttempts", "actionCommandSuccesses", "hitsTaken", "hitsBlocked", "playerFirstStrikes", "enemyFirstStrikes",
+    "powerBounces", "battlesCount", "battlesWon", "fleeAttempts", "battlesFled", "trainingsDone"].map((k, i) => ["player." + k, P + 0x294 + 2 * i, "H"]),
+  ["player.walkingStepsTaken", P + 0x2AC, "i"], ["player.runningStepsTaken", P + 0x2B0, "i"], ["player.totalCoinsEarned", P + 0x2B4, "I"],
+  ["player.idleFrameCounter", P + 0x2B8, "h"], ["player.frameCounter", P + 0x2BC, "I"],
+  ["player.quizzesAnswered", P + 0x2C0, "H"], ["player.quizzesCorrect", P + 0x2C2, "H"],
+  ["player.partnerUnlockedTime", P + 0x2C4, "i", 12], ["player.partnerUsedTime", P + 0x2F4, "i", 12],
+  ["player.tradeEventStartTime", P + 0x324, "i"], ["player.droTreeHintTime", P + 0x328, "i"],
+  ["player.starPiecesCollected", P + 0x32C, "H"], ["player.jumpGamePlays", P + 0x32E, "H"], ["player.jumpGameTotal", P + 0x330, "I"],
+  ["player.jumpGameRecord", P + 0x334, "H"], ["player.smashGamePlays", P + 0x336, "H"], ["player.smashGameTotal", P + 0x338, "I"],
+  ["player.smashGameRecord", P + 0x33C, "H"],
+  ["areaID", 0x468, "h"], ["mapID", 0x46A, "h"], ["entryID", 0x46C, "h"], ["unk_46E", 0x46E, "B", 2],
+  ["enemyDefeatFlags", 0x470, "i", 720, 12], ["globalFlags", 0xFB0, "i", 64], ["globalBytes", 0x10B0, "b", 512],
+  ["areaFlags", 0x12B0, "i", 8], ["areaBytes", 0x12D0, "b", 16],
+  ["debugEnemyContact", 0x12E0, "b"], ["debugUnused1", 0x12E1, "b"], ["debugUnused2", 0x12E2, "b"], ["musicEnabled", 0x12E3, "b"],
+  ["unk_12E4", 0x12E4, "B", 2], ["savePos", 0x12E6, "h", 3],
+  ["summary.timePlayed", META, "i"], ["summary.spiritsRescued", META + 4, "B"], ["summary.unused_05", META + 5, "B", 1],
+  ["summary.level", META + 6, "b"], ["summary.filename", META + 7, "b", 8], ["summary.unused_0F", META + 0x0F, "B", 9],
+  ["unk_1304", 0x1304, "B", 124],
+];
+const TYPE_SIZE = {b: 1, B: 1, h: 2, H: 2, i: 4, I: 4};
+function getField(dv, o, t) {
+  return t === "b" ? dv.getInt8(o) : t === "B" ? dv.getUint8(o) : t === "h" ? dv.getInt16(o, true)
+    : t === "H" ? dv.getUint16(o, true) : t === "i" ? dv.getInt32(o, true) : dv.getUint32(o, true);
+}
+function setField(dv, o, t, v) {
+  const size = TYPE_SIZE[t];
+  if (size === 1) dv.setUint8(o, v & 0xFF); else if (size === 2) dv.setUint16(o, v & 0xFFFF, true); else dv.setUint32(o, v >>> 0, true);
+}
+const pbNum = v => typeof v === "boolean" ? +v : Number(v) || 0;
+const pbGet = (j, path) => path.split(".").reduce((o, k) => o == null ? undefined : o[k], j);
+function pbSet(j, path, v) {
+  const keys = path.split("."), last = keys.pop();
+  keys.reduce((o, k) => o[k] ??= {}, j)[last] = v;
+}
+
+// one Paperboat file -> a Star Haven (little-endian) save block for that slot
+function pbToBlock(j, slot) {
+  const b = new Uint8Array(SAVE_SIZE), dv = new DataView(b.buffer);
+  for (let i = 0; i < 15; i++) b[i] = MAGIC.charCodeAt(i);
+  for (const [name, off, t, count, row] of PB_FIELDS) {
+    const v = pbGet(j, name);
+    if (t === "partners") {
+      for (let p = 0; p < count; p++) {
+        const e = (Array.isArray(v) && v[p]) || {}, u = Array.isArray(e.unk_02) ? e.unk_02 : [];
+        dv.setUint8(off + p * 8, pbNum(e.enabled) & 0xFF); dv.setUint8(off + p * 8 + 1, pbNum(e.level) & 0xFF);
+        for (let k = 0; k < 3; k++) dv.setUint16(off + p * 8 + 2 + k * 2, pbNum(u[k]) & 0xFFFF, true);
+      }
+    } else if (count === undefined) {
+      setField(dv, off, t, pbNum(v));
+    } else {
+      const vals = Array.isArray(v) ? v.flat() : [];
+      for (let k = 0; k < count; k++) setField(dv, off + k * TYPE_SIZE[t], t, pbNum(vals[k]));
+    }
+  }
+  dv.setInt32(0x38, slot, true);
+  const crc = blockSum(b, SAVE_SIZE, false);
+  wr32(b, 0x30, crc, false); wr32(b, 0x34, ~crc, false);
+  return b;
+}
+
+// a Star Haven save block -> Paperboat's file JSON, written the way Paperboat writes it
+function blockToPb(b) {
+  const dv = new DataView(b.buffer, b.byteOffset, SAVE_SIZE);
+  const j = {magicString: "Mario Story 006", modName: "PaperBoat", majorVersion: 1, minorVersion: 0, patchVersion: 0, reserved: 0,
+    crc1: dv.getInt32(0x30, true), crc2: dv.getInt32(0x34, true)};
+  for (const [name, off, t, count, row] of PB_FIELDS) {
+    let v;
+    if (t === "partners") {
+      v = [];
+      for (let p = 0; p < count; p++) v.push({enabled: dv.getUint8(off + p * 8), level: dv.getInt8(off + p * 8 + 1),
+        unk_02: [0, 1, 2].map(k => dv.getInt16(off + p * 8 + 2 + k * 2, true))});
+    } else if (count === undefined) {
+      v = getField(dv, off, t);
+    } else {
+      const flat = Array.from({length: count}, (_, k) => getField(dv, off + k * TYPE_SIZE[t], t));
+      v = row ? Array.from({length: count / row}, (_, r) => flat.slice(r * row, r * row + row)) : flat;
+    }
+    pbSet(j, name, v);
+  }
+  j.ship = {hasDiedOnce: 0};
+  // Paperboat puts arrays of numbers on one line
+  return JSON.stringify(j, null, 4).replace(/\[([-\d,\s]*)\]/g, (m, inner) => "[" + inner.trim().split(/\s*,\s*/).filter(Boolean).join(", ") + "]");
+}
+
+// Paperboat files (and optionally a save to merge them into) -> a Star Haven image
+// returns {img, slots: [{slot, from}], bad: [file names that aren't Paperboat saves]}
+function fromPaperboat(jsons, base) {
+  const files = new Map(), bad = [];
+  for (const {name, text} of jsons) {
+    let j = null;
+    try { j = JSON.parse(text); } catch (e) {}
+    const m = /file(\d)\.json$/i.exec(name), slot = m ? +m[1] : j && pbNum(j.saveSlot);
+    if (!j || typeof j.player !== "object" || !String(j.magicString).startsWith("Mario Story") || !(slot >= 0 && slot < 4)) { bad.push(name); continue; }
+    files.set(slot, pbToBlock(j, slot));
+  }
+  const kept = base ? newestBlocks(base.img, base.ok, false) : new Map();
+  const img = new Uint8Array(FLASH).fill(0xFF), list = [];
+  for (let s = 0; s < 4; s++) {
+    const b = files.get(s) || kept.get(s);
+    if (!b) continue;
+    img.set(b, s * STRIDE);
+    list.push({slot: s, from: files.has(s) ? "paperboat" : "kept"});
+  }
+  if (base) for (const i of base.ok.filter(i => i >= 6)) img.set(base.img.subarray(i * STRIDE, i * STRIDE + GLOBALS_SIZE), i * STRIDE);
+  return {img, slots: list, bad, count: files.size};
+}
 
 function download(data, name) {
   const url = URL.createObjectURL(new Blob([data], {type: "application/octet-stream"}));
@@ -191,8 +331,19 @@ function button(label, onClick) {
   $("buttons").appendChild(b);
 }
 
-function show(name, bytes) {
+function reset() {
   $("result").hidden = false; $("files").replaceChildren(); $("buttons").replaceChildren(); $("where").textContent = "";
+}
+function listSlots(img, ok, be, label) {
+  for (const s of slots(img, ok, be)) {
+    const li = document.createElement("li");
+    li.textContent = `File ${s.slot + 1}: level ${s.level}, ${s.spirits} star spirit${s.spirits === 1 ? "" : "s"} rescued${label ? label(s.slot) : ""}`;
+    $("files").appendChild(li);
+  }
+}
+
+function show(name, bytes) {
+  reset();
   const found = detect(bytes);
   if (!found) {
     $("status").className = "status bad";
@@ -200,11 +351,7 @@ function show(name, bytes) {
     return;
   }
   const be = found.kind === "n64";
-  for (const s of slots(found.img, found.ok, be)) {
-    const li = document.createElement("li");
-    li.textContent = `File ${s.slot + 1}: level ${s.level}, ${s.spirits} star spirit${s.spirits === 1 ? "" : "s"} rescued`;
-    $("files").appendChild(li);
-  }
+  listSlots(found.img, found.ok, be);
   $("status").className = "status ok";
   if (be) {
     $("status").textContent = `N64 save found${found.srm ? " (RetroArch .srm)" : found.width === 4 ? " (Project64 word order)" : ""}. Download it for Star Haven:`;
@@ -213,22 +360,56 @@ function show(name, bytes) {
     button("save_us.fla (US ROM)", () => download(out, "save_us.fla"));
     $("where").textContent = "Copy it to /3ds/StarHaven/ on the SD card. It replaces all Star Haven files there, so back up the old one first.";
   } else {
-    $("status").textContent = "Star Haven save found. Download it for an N64 emulator:";
+    $("status").textContent = "Star Haven save found. Download it for an N64 emulator or Paperboat:";
     const out = convert(found, true);
     const base = name.replace(/\.[^.]*$/, "") || "save";
     button("N64 order (.fla)", () => download(out, `${base}_n64.fla`));
     button("Project64 order (.fla)", () => download(reorder(out, 4), `${base}_pj64.fla`));
-    $("where").textContent = "Rename it to what your emulator expects for Paper Mario, usually the ROM's name with .fla.";
+    for (const [slot, block] of [...newestBlocks(found.img, found.ok, false)].sort((a, b) => a[0] - b[0]))
+      button(`Paperboat file${slot}.json (File ${slot + 1})`, () => download(blockToPb(block), `file${slot}.json`));
+    $("where").textContent = "For an emulator, rename it to what it expects for Paper Mario, usually the ROM's name with .fla. Paperboat files go in Paperboat's saves folder"
+      + (/save_us/i.test(name) ? "." : ", and only from a save played with the US ROM (save_us.fla): Paperboat is the US version.");
   }
 }
 
-async function load(file) { if (file) show(file.name, new Uint8Array(await file.arrayBuffer())); }
-$("file").addEventListener("change", e => load(e.target.files[0]));
+function showPaperboat(jsons, bin) {
+  reset();
+  let base = null, note = "";
+  if (bin) {
+    const found = detect(bin.bytes);
+    if (found) base = found.kind === "starhaven" ? found : {img: convert(found, false), ok: found.ok};
+    else note = ` ${bin.name} holds no Paper Mario save, so it was left out.`;
+  }
+  const r = fromPaperboat(jsons, base);
+  if (r.bad.length) note += ` Not a Paperboat save file: ${r.bad.join(", ")}.`;
+  if (!r.count) {
+    $("status").className = "status bad";
+    $("status").textContent = "No Paperboat save found." + note + " Paperboat keeps them in its saves folder as file0.json to file3.json.";
+    return;
+  }
+  listSlots(r.img, validBlocks(r.img, false), false, slot => r.slots.find(s => s.slot === slot).from === "paperboat" ? " (from Paperboat)" : " (kept)");
+  $("status").className = "status ok";
+  $("status").textContent = `Paperboat save${r.count === 1 ? "" : "s"} converted.${note} Download it for Star Haven:`;
+  button("save_us.fla (US ROM)", () => download(r.img, "save_us.fla"));
+  $("where").textContent = "Copy it to /3ds/StarHaven/ on the SD card and play with the US ROM. It replaces the save_us.fla there, so back up the old one first.";
+}
+
+async function load(fileList) {
+  const jsons = [], bins = [];
+  for (const file of fileList || []) {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    if (/\.json$/i.test(file.name) || bytes[0] === 0x7B) jsons.push({name: file.name, text: new TextDecoder().decode(bytes)});
+    else bins.push({name: file.name, bytes});
+  }
+  if (jsons.length) showPaperboat(jsons, bins[0]);
+  else if (bins.length) show(bins[0].name, bins[0].bytes);
+}
+$("file").addEventListener("change", e => load(e.target.files));
 const drop = $("drop");
 ["dragenter", "dragover"].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add("over"); }));
 ["dragleave", "drop"].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove("over"); }));
 document.addEventListener("dragover", e => e.preventDefault());
-document.addEventListener("drop", e => { e.preventDefault(); load(e.dataTransfer.files[0]); });
+document.addEventListener("drop", e => { e.preventDefault(); load(e.dataTransfer.files); });
 </script>
 </body>
 </html>
