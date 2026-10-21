@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Star Haven Save Converter</title>
+<meta name="description" content="Convert Paper Mario N64 saves (.fla, .srm) to Star Haven for 3DS and back. Runs in your browser; nothing is uploaded.">
+<style>
+  :root {
+    --bg-top: #f7c46c; --bg-bottom: #e0843a;
+    --panel: #fff6df; --edge: #6b3e1a; --ink: #3b2412; --muted: #7a5a3c;
+    --btn: #7a4a22; --btn-ink: #fff6df; --ok: #2f7a3a; --bad: #a3321f;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg-bottom); }
+  body {
+    margin: 0; min-height: 100vh; padding: 32px 16px 48px;
+    background: linear-gradient(var(--bg-top), var(--bg-bottom));
+    color: var(--ink); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 640px; margin: 0 auto; }
+  .panel {
+    background: var(--panel); border: 3px solid var(--edge); border-radius: 14px;
+    box-shadow: 0 4px 0 rgba(107, 62, 26, .35); padding: 22px 24px; margin-bottom: 18px;
+  }
+  h1 { margin: 0 0 4px; font-size: 1.7rem; letter-spacing: .02em; }
+  h2 { margin: 0 0 10px; font-size: 1.1rem; }
+  p { margin: 0 0 10px; }
+  .sub { color: var(--muted); margin: 0; }
+  #drop {
+    display: block; border: 3px dashed var(--edge); border-radius: 12px; padding: 34px 16px;
+    text-align: center; cursor: pointer; transition: background .15s;
+  }
+  #drop:hover, #drop.over { background: #ffeec4; }
+  #drop strong { display: block; font-size: 1.15rem; }
+  #drop span { color: var(--muted); font-size: .92rem; }
+  #file { position: absolute; width: 1px; height: 1px; opacity: 0; }
+  #result[hidden] { display: none; }
+  .status { font-weight: 600; margin-bottom: 8px; }
+  .status.ok { color: var(--ok); } .status.bad { color: var(--bad); }
+  ul.files { margin: 0 0 14px; padding-left: 20px; }
+  .buttons { display: flex; flex-wrap: wrap; gap: 10px; margin: 6px 0 12px; }
+  button {
+    font: inherit; font-weight: 600; color: var(--btn-ink); background: var(--btn);
+    border: 0; border-radius: 999px; padding: 9px 18px; cursor: pointer;
+    box-shadow: 0 3px 0 #4a2a10;
+  }
+  button:active { transform: translateY(2px); box-shadow: 0 1px 0 #4a2a10; }
+  .note { color: var(--muted); font-size: .92rem; }
+  code { background: #f3e2bd; padding: 1px 5px; border-radius: 4px; font-size: .92em; }
+  ol { padding-left: 20px; margin: 0; } li { margin-bottom: 6px; }
+  a { color: #8a3b0c; }
+  footer { text-align: center; color: #4a2a10; font-size: .9rem; }
+</style>
+</head>
+<body>
+<main>
+  <div class="panel">
+    <h1>Star Haven Save Converter</h1>
+    <p class="sub">Paper Mario N64 saves to <a href="https://github.com/SecondaryLifer/StarHaven">Star Haven</a> (3DS) and back. Everything happens in your browser, nothing is uploaded.</p>
+  </div>
+
+  <div class="panel">
+    <label id="drop" for="file">
+      <strong>Drop a save file here</strong>
+      <span>or tap to pick one: <code>.fla</code> (Project64, mupen64plus, ares, flashcarts), <code>.srm</code> (RetroArch) or a Star Haven <code>save.fla</code></span>
+    </label>
+    <input type="file" id="file">
+    <div id="result" hidden>
+      <p class="status" id="status"></p>
+      <ul class="files" id="files"></ul>
+      <div class="buttons" id="buttons"></div>
+      <p class="note" id="where"></p>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>N64 to Star Haven</h2>
+    <ol>
+      <li>Drop your N64 save above and download the Star Haven save.</li>
+      <li>On the SD card, back up <code>/3ds/StarHaven/save.fla</code> if you have one. The new file replaces every Star Haven save file.</li>
+      <li>Copy the new file to <code>/3ds/StarHaven/</code>: <code>save.fla</code> if you play with the European ROM, <code>save_us.fla</code> with the US ROM.</li>
+    </ol>
+    <p class="note" style="margin-top:10px">The next Star Haven update (1.1.1) will do this by itself: put the N64 save in <code>/3ds/StarHaven/</code> as <code>import.fla</code> (or <code>import.srm</code>) and start the game. Your old saves are kept as <code>save.fla.bak</code>.</p>
+  </div>
+
+  <div class="panel">
+    <h2>Star Haven to N64</h2>
+    <p>Drop your Star Haven <code>save.fla</code> above and pick the order your emulator wants. Most use the N64 order; if your emulator shows no save, try the Project64 one. For RetroArch, load the game once, close it, and replace the last 128 KB of its <code>.srm</code>, or use an emulator that takes <code>.fla</code> files.</p>
+    <p class="note">The game is the same on N64 and 3DS, so files carry over as they are. A save from the European version is best used with the European ROM, and a US save with the US ROM. Virtual Console saves need to be taken out of the console with another tool first.</p>
+  </div>
+
+  <footer>Star Haven is a fan-made 3DS port. It needs your own Paper Mario ROM.</footer>
+</main>
+
+<script>
+// Mirrors the import in port/3ds/source/n64_shim/os_flash.c.
+// The cart's FlashRAM (128 KB) keeps the save structs big-endian; Star Haven keeps the same image
+// little-endian. A block is found by the "Mario Story 006" magic and a checksum that sums it as
+// 32-bit words (crc1 taken as 0, crc2 as ~0), so each block is swapped field by field and re-summed.
+const FLASH = 0x20000, STRIDE = 0x4000, SAVE_SIZE = 0x1380, GLOBALS_SIZE = 0x80;
+const SRM_SIZE = 0x48800, SRM_FLASH = 0x28800;   // RetroArch mupen64plus: eeprom, 4 paks, sram, flash
+const MAGIC = "Mario Story 006\0";
+// every 2- and 4-byte field of SaveData / SaveGlobals as [offset, size, count]
+const SAVE_RUNS = [[48,4,4],[76,2,1],[86,2,3],[94,2,3],[102,2,3],[110,2,3],[118,2,3],[126,2,3],[134,2,3],
+  [142,2,3],[150,2,3],[158,2,3],[166,2,3],[174,2,269],[716,2,1],[720,2,1],[724,2,12],[748,4,3],[760,2,1],
+  [764,4,1],[768,2,2],[772,4,26],[876,2,2],[880,4,1],[884,2,2],[888,4,1],[892,2,1],[1128,2,3],[1136,4,784],
+  [4784,4,8],[4838,2,3],[4844,4,1]];
+const GLOBALS_RUNS = [[48,4,5]];
+const META = 0x12EC;   // SaveMetadata: +4 star spirits, +6 level
+
+const blockSize = i => i < 6 ? SAVE_SIZE : GLOBALS_SIZE;
+const rd32 = (b, o, be) => new DataView(b.buffer, b.byteOffset + o, 4).getUint32(0, !be);
+const wr32 = (b, o, v, be) => new DataView(b.buffer, b.byteOffset + o, 4).setUint32(0, v >>> 0, !be);
+
+function blockSum(b, len, be) {
+  let sum = 0xFFFFFFFF;
+  for (let i = 0; i < len; i += 4) if (i !== 0x30 && i !== 0x34) sum = (sum + rd32(b, i, be)) >>> 0;
+  return sum;
+}
+function blockValid(b, len, be) {
+  for (let i = 0; i < 16; i++) if (b[i] !== MAGIC.charCodeAt(i)) return false;
+  const c1 = rd32(b, 0x30, be), c2 = rd32(b, 0x34, be);
+  return c1 === (~c2 >>> 0) && c1 === blockSum(b, len, be);
+}
+function reorder(src, width) {   // every width-byte group reversed; bytes past the file read erased
+  const out = new Uint8Array(FLASH);
+  for (let i = 0; i < FLASH; i++) {
+    const s = i - i % width + (width - 1 - i % width);
+    out[i] = s < src.length ? src[s] : 0xFF;
+  }
+  return out;
+}
+function validBlocks(img, be) {
+  const ok = [];
+  for (let i = 0; i < 8; i++) if (blockValid(img.subarray(i * STRIDE, i * STRIDE + blockSize(i)), blockSize(i), be)) ok.push(i);
+  return ok;
+}
+const saveCount = ok => ok.filter(i => i < 6).length;
+
+// what is in the file: {kind: "n64" | "starhaven", img (in the file's own field order, words fixed), ok, width}
+function detect(bytes) {
+  let src = bytes, srm = false;
+  if (bytes.length >= SRM_SIZE) { src = bytes.subarray(SRM_FLASH, SRM_FLASH + FLASH); srm = true; }
+  let best = null;
+  for (const width of [1, 4, 2]) {
+    const img = reorder(src, width), ok = validBlocks(img, true);
+    if (saveCount(ok) && (!best || saveCount(ok) > saveCount(best.ok))) best = {kind: "n64", img, ok, width};
+  }
+  const img = reorder(src, 1), ok = validBlocks(img, false);
+  if (saveCount(ok) && (!best || saveCount(ok) > saveCount(best.ok))) best = {kind: "starhaven", img, ok, width: 1};
+  if (best) best.srm = srm;
+  return best;
+}
+
+// swap every valid block from one byte order to the other and redo its checksum; the rest is erased
+function convert(found, toBe) {
+  const out = new Uint8Array(FLASH).fill(0xFF);
+  for (const i of found.ok) {
+    const b = found.img.slice(i * STRIDE, i * STRIDE + blockSize(i));
+    for (const [off, size, count] of i < 6 ? SAVE_RUNS : GLOBALS_RUNS)
+      for (let o = off; o < off + size * count; o += size) b.subarray(o, o + size).reverse();
+    const crc = blockSum(b, b.length, toBe);
+    wr32(b, 0x30, crc, toBe); wr32(b, 0x34, ~crc, toBe);
+    out.set(b, i * STRIDE);
+  }
+  return out;
+}
+
+// newest copy of each file slot, for the summary
+function slots(img, ok, be) {
+  const bySlot = new Map();
+  for (const i of ok.filter(i => i < 6)) {
+    const o = i * STRIDE, slot = rd32(img, o + 0x38, be) & 3, count = rd32(img, o + 0x3C, be) | 0;
+    if (!bySlot.has(slot) || bySlot.get(slot).count < count)
+      bySlot.set(slot, {slot, count, level: img[o + META + 6], spirits: img[o + META + 4]});
+  }
+  return [...bySlot.values()].sort((a, b) => a.slot - b.slot);
+}
+
+function download(data, name) {
+  const url = URL.createObjectURL(new Blob([data], {type: "application/octet-stream"}));
+  const a = Object.assign(document.createElement("a"), {href: url, download: name});
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+const $ = id => document.getElementById(id);
+function button(label, onClick) {
+  const b = document.createElement("button"); b.type = "button"; b.textContent = label; b.onclick = onClick;
+  $("buttons").appendChild(b);
+}
+
+function show(name, bytes) {
+  $("result").hidden = false; $("files").replaceChildren(); $("buttons").replaceChildren(); $("where").textContent = "";
+  const found = detect(bytes);
+  if (!found) {
+    $("status").className = "status bad";
+    $("status").textContent = `No Paper Mario save found in ${name}. It needs a FlashRAM save (.fla, 128 KB) or a RetroArch .srm with the game saved at least once.`;
+    return;
+  }
+  const be = found.kind === "n64";
+  for (const s of slots(found.img, found.ok, be)) {
+    const li = document.createElement("li");
+    li.textContent = `File ${s.slot + 1}: level ${s.level}, ${s.spirits} star spirit${s.spirits === 1 ? "" : "s"} rescued`;
+    $("files").appendChild(li);
+  }
+  $("status").className = "status ok";
+  if (be) {
+    $("status").textContent = `N64 save found${found.srm ? " (RetroArch .srm)" : found.width === 4 ? " (Project64 word order)" : ""}. Download it for Star Haven:`;
+    const out = convert(found, false);
+    button("save.fla (European ROM)", () => download(out, "save.fla"));
+    button("save_us.fla (US ROM)", () => download(out, "save_us.fla"));
+    $("where").textContent = "Copy it to /3ds/StarHaven/ on the SD card. It replaces all Star Haven files there, so back up the old one first.";
+  } else {
+    $("status").textContent = "Star Haven save found. Download it for an N64 emulator:";
+    const out = convert(found, true);
+    const base = name.replace(/\.[^.]*$/, "") || "save";
+    button("N64 order (.fla)", () => download(out, `${base}_n64.fla`));
+    button("Project64 order (.fla)", () => download(reorder(out, 4), `${base}_pj64.fla`));
+    $("where").textContent = "Rename it to what your emulator expects for Paper Mario, usually the ROM's name with .fla.";
+  }
+}
+
+async function load(file) { if (file) show(file.name, new Uint8Array(await file.arrayBuffer())); }
+$("file").addEventListener("change", e => load(e.target.files[0]));
+const drop = $("drop");
+["dragenter", "dragover"].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave", "drop"].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove("over"); }));
+document.addEventListener("dragover", e => e.preventDefault());
+document.addEventListener("drop", e => { e.preventDefault(); load(e.dataTransfer.files[0]); });
+</script>
+</body>
+</html>
