@@ -86,7 +86,7 @@
 
   <div class="panel">
     <h2>Star Haven to N64</h2>
-    <p>Drop your Star Haven <code>save.fla</code> above and pick the order your emulator wants. Most use the N64 order; if your emulator shows no save, try the Project64 one. For RetroArch, load the game once, close it, and replace the last 128 KB of its <code>.srm</code>, or use an emulator that takes <code>.fla</code> files.</p>
+    <p>Drop your Star Haven <code>save.fla</code> above and pick the order your emulator wants. Most use the N64 order; if your emulator shows no save, try the Project64 one. For RetroArch, take the <code>.srm</code>: name it like your ROM (<code>Paper Mario (USA).srm</code> for <code>Paper Mario (USA).z64</code>) and put it in RetroArch's <code>saves</code> folder, replacing the one there (back it up first).</p>
     <p class="note">The game is the same on N64 and 3DS, so files carry over as they are. A save from the European version is best used with the European ROM, and a US save with the US ROM. Virtual Console saves need to be taken out of the console with another tool first.</p>
   </div>
 
@@ -132,6 +132,13 @@ function blockValid(b, len, be) {
   for (let i = 0; i < 16; i++) if (b[i] !== MAGIC.charCodeAt(i)) return false;
   const c1 = rd32(b, 0x30, be), c2 = rd32(b, 0x34, be);
   return c1 === (~c2 >>> 0) && c1 === blockSum(b, len, be);
+}
+// a whole RetroArch mupen64plus-next .srm: the other save types blank, the flash
+// at SRM_FLASH in the core's 32-bit word order (tested by loading it in RetroArch)
+function toSrm(n64) {
+  const out = new Uint8Array(SRM_SIZE).fill(0xFF);
+  out.set(reorder(n64, 4), SRM_FLASH);
+  return out;
 }
 function reorder(src, width) {   // every width-byte group reversed; bytes past the file read erased
   const out = new Uint8Array(FLASH);
@@ -365,6 +372,7 @@ function show(name, bytes) {
     const base = name.replace(/\.[^.]*$/, "") || "save";
     button("N64 order (.fla)", () => download(out, `${base}_n64.fla`));
     button("Project64 order (.fla)", () => download(reorder(out, 4), `${base}_pj64.fla`));
+    button("RetroArch (.srm)", () => download(toSrm(out), `${base}.srm`));
     for (const [slot, block] of [...newestBlocks(found.img, found.ok, false)].sort((a, b) => a[0] - b[0]))
       button(`Paperboat file${slot}.json (File ${slot + 1})`, () => download(blockToPb(block), `file${slot}.json`));
     $("where").textContent = "For an emulator, rename it to what it expects for Paper Mario, usually the ROM's name with .fla. Paperboat files go in Paperboat's saves folder"
