@@ -356,6 +356,31 @@ export function discover(van, vrom, hrom, log = () => {}) {
             for (let x = 0; x < a.length; x++) if (a[x] !== b[x]) return true;
             return false;
         };
+        // a function the hack rewrote longer takes the place of the ones after it (discover.py)
+        // (only when its own code branches past that end, and only over functions the hack rewrote too)
+        for (let x = 0; x < fl.length; x++) {
+            if (!changed(fl[x])) continue;
+            const nextKept = fl.slice(x + 1).find((f) => !changed(f));
+            const lim = nextKept ? nextKept[0] : k.vram + k.size;
+            let past = false;
+            for (let pc = fl[x][0]; pc < fl[x][1] && !past; pc += 4) {
+                const i = k.ins(pc);
+                if (i !== null && i.isValid() && i.isBranch()) {
+                    const t = i.getBranchVramGeneric();
+                    if (fl[x][1] <= t && t < lim) past = true;
+                }
+            }
+            const [end] = past ? extent(k, fl[x][0], lim) : [null];
+            if (end && end > fl[x][1]) {
+                const gone = fl.slice(x + 1).filter((f) => f[0] < end);
+                (resize[s.name] ||= {})[fl[x][2]] = end - fl[x][0];
+                if (gone.length) (drop[s.name] ||= []).push(...gone.map((f) => f[2]));
+                fl[x] = [fl[x][0], end, fl[x][2]];
+                fl.splice(x + 1, gone.length);
+            }
+        }
+        starts.length = 0;
+        starts.push(...fl.map((f) => f[0]));
         const mine = allSorted.filter((c) => k.contains(c));
         if (keptSpans.filter(([a, b]) => a < k.vram + k.size && k.vram < b).length > 1) {
             for (const t of mine) {
