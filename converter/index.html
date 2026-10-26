@@ -51,13 +51,22 @@
   ol { padding-left: 20px; margin: 0; } li { margin-bottom: 6px; }
   a { color: #8a3b0c; }
   footer { text-align: center; color: #4a2a10; font-size: .9rem; }
+  .tag { font-size: .75rem; font-weight: 600; color: var(--btn-ink); background: var(--muted); border-radius: 999px; padding: 2px 9px; vertical-align: middle; }
+  label.field { display: block; margin: 0 0 12px; font-weight: 600; }
+  label.field input { display: block; width: 100%; margin-top: 4px; font: inherit; font-weight: 400; }
+  label.field input[type=text] { padding: 7px 10px; border: 2px solid var(--edge); border-radius: 8px; background: #fffaf0; color: var(--ink); }
+  progress { width: 100%; height: 14px; accent-color: var(--btn); }
+  #hk-stage { margin-top: 6px; }
+  #hk-stage.bad { color: var(--bad); }
+  #hk-log { max-height: 220px; overflow: auto; background: #f3e2bd; padding: 8px 10px; border-radius: 8px; font-size: .8rem; white-space: pre-wrap; }
+  #hk-progress[hidden], #hk-result[hidden] { display: none; }
 </style>
 </head>
 <body>
 <main>
   <div class="panel">
     <h1>Star Haven Save Converter</h1>
-    <p class="sub">Paper Mario N64 and Paperboat (PC) saves to <a href="https://github.com/SecondaryLifer/StarHaven">Star Haven</a> (3DS) and back. Everything happens in your browser, nothing is uploaded.</p>
+    <p class="sub">Paper Mario N64 and Paperboat (PC) saves to <a href="https://github.com/SecondaryLifer/StarHaven">Star Haven</a> (3DS) and back. Everything happens in your browser, nothing is uploaded. New: turn a <a href="#hacks">ROM hack</a> into a 3DS app.</p>
   </div>
 
   <div class="panel">
@@ -100,8 +109,32 @@
     <p class="note" style="margin-top:10px">Paperboat is the US version, so this works with Star Haven played with the US ROM (<code>save_us.fla</code>). Paperboat can bring in N64 saves by itself.</p>
   </div>
 
+  <div class="panel" id="hacks">
+    <h2>ROM hacks <span class="tag">experimental</span></h2>
+    <p>Turns a Paper Mario ROM hack into a 3DS app for the Homebrew Launcher. The hack's code gets recompiled right here in your browser, nothing is uploaded. Made for Star Rod mods like Black Pit.</p>
+    <label class="field">Your Paper Mario (USA) ROM <input type="file" id="hk-rom" accept=".z64,.n64,.v64"></label>
+    <label class="field">The hack: its patch (<code>.bps</code>, <code>.ips</code>) or the patched ROM <input type="file" id="hk-hack"></label>
+    <label class="field">Name on the 3DS <input type="text" id="hk-name" maxlength="60" placeholder="Black Pit"></label>
+    <div class="buttons"><button id="hk-go">Make the 3DS app</button></div>
+    <div id="hk-progress" hidden>
+      <progress id="hk-bar" max="1" value="0"></progress>
+      <p class="status" id="hk-stage"></p>
+      <details><summary class="note">Details</summary><pre id="hk-log"></pre></details>
+    </div>
+    <div id="hk-result" hidden>
+      <div class="buttons"><button id="hk-get-app">Download the app</button><button id="hk-get-rom">Download the patched ROM</button></div>
+      <ol>
+        <li>Copy <code id="hk-app-name"></code> to <code>/3ds/</code> on the SD card.</li>
+        <li>Copy <code id="hk-rom-name"></code> to <code>/3ds/StarHaven/hacks/</code>.</li>
+        <li>Start it from the Homebrew Launcher. It saves to <code>/3ds/StarHaven/hacks/<span id="hk-save-name"></span></code>.</li>
+      </ol>
+    </div>
+    <p class="note">The first time, it downloads about 50 MB of tools. A computer with 8 GB of RAM or more works best, and it takes a minute or two. Hacks that only run on an emulator's interpreter core may not work.</p>
+  </div>
+
   <footer>Star Haven is a fan-made 3DS port. It needs your own Paper Mario ROM.</footer>
 </main>
+<script type="module">import { setup } from "./hacks/js/app.js"; setup();</script>
 
 <script>
 // Mirrors the import in port/3ds/source/n64_shim/os_flash.c.
