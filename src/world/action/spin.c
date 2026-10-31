@@ -192,6 +192,31 @@ void action_update_spin(void) {
         }
     }
 
+#ifdef _3DS
+    {
+        // Steerable spin (Settings, Discord suggestion): the stick turns the dash, a limited
+        // amount per step so it stays a dash. A spin from standstill starts moving when pushed.
+        extern bool pm3ds_steer_spin(void);
+        if (pm3ds_steer_spin() && gGameStatusPtr->demoState == DEMO_STATE_NONE
+            && !(playerStatus->flags & PS_FLAG_INPUT_DISABLED) && playerStatus->actionSubstate <= SUBSTATE_SPIN_1) {
+            player_input_to_move_vector(&angle, &magnitude);
+            if (magnitude != 0.0f) {
+                f32 delta = get_clamped_angle_diff(playerStatus->targetYaw, angle);
+                if (delta > 15.0f) {
+                    delta = 15.0f;
+                } else if (delta < -15.0f) {
+                    delta = -15.0f;
+                }
+                playerStatus->targetYaw = clamp_angle(playerStatus->targetYaw + delta);
+                if (playerSpinState->inputMagnitude == 0.0f) {
+                    playerStatus->targetYaw = angle;
+                    playerSpinState->inputMagnitude = magnitude;
+                }
+            }
+        }
+    }
+#endif
+
     if (!(playerStatus->curStateTime > playerSpinState->fullSpeedSpinTime)) {
         speedModifier = (playerSpinState->inputMagnitude) ? playerSpinState->speedScale : 0.0f;
         playerSpinState->spinDirectionMagnitude = playerSpinState->spinDirectionMagnitude + 0.9;

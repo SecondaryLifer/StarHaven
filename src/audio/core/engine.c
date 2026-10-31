@@ -1259,6 +1259,17 @@ void au_clear_instrument_group(s32 bankIndex, BankSet bankSet) {
 void au_set_bus_volume_level(s32 soundTypeFlags, u32 volPreset) {
     if (volPreset < ARRAY_COUNT(PerceptualVolumeLevels)) {
         s32 vol = PerceptualVolumeLevels[volPreset];
+#ifdef _3DS
+        // Settings > Sound (GitHub #78): the switched off bus stays at 0 whatever the game sets
+        extern bool pm3ds_music_on(void);
+        extern bool pm3ds_sfx_on(void);
+        s32 sfxVol = pm3ds_sfx_on() ? vol : 0;
+        if (!pm3ds_music_on()) {
+            vol = 0;
+        }
+#else
+        s32 sfxVol = vol;
+#endif
         if (soundTypeFlags & AUDIO_TYPE_BGM) {
             gBGMPlayerA->busVolume = vol;
             au_fade_flush(&gBGMPlayerA->fadeInfo);
@@ -1266,7 +1277,7 @@ void au_set_bus_volume_level(s32 soundTypeFlags, u32 volPreset) {
             au_fade_flush(&gBGMPlayerB->fadeInfo);
         }
         if (soundTypeFlags & AUDIO_TYPE_SFX) {
-            gSoundManager->busVolume = vol;
+            gSoundManager->busVolume = sfxVol;
             au_fade_flush(&gSoundManager->fadeInfo);
         }
     }

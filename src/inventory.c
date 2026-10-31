@@ -844,7 +844,12 @@ void update_status_bar(void) {
         status_bar_draw_stat(statusBar->fpTimesHID, x, y, statusBar->displayFP, playerData->curMaxFP);
     }
 
+#ifdef _3DS
+    extern int pm3ds_max_level(void);   // cheats.c: levels past 27 (GitHub #77)
+    if (playerData->level >= pm3ds_max_level()) {
+#else
     if (playerData->level >= 27) {
+#endif
         playerData->starPoints = 0;
     }
 

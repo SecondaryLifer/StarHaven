@@ -49,6 +49,11 @@ typedef struct {
     bool battle_hud;      /* the top screen's HP/FP bar in battle (GitHub #75: the bottom screen shows them too) */
     bool ice_fx;          /* the Ice Power badge's snowflakes and sound on a hit (Discord suggestion) */
     bool dpad_menus;      /* the D-pad moves the cursor while a menu is open (Discord suggestion) */
+    bool music_on;        /* Sound: the music (GitHub #78; a muted bus, so anything waiting on a song still runs) */
+    bool sfx_on;          /* Sound: sound effects and ambience */
+    int jukebox;          /* Sound: a song played instead of the area's (n64_shim/jukebox.c); -1 off */
+    bool steer_spin;      /* the stick steers a spin dash (Discord suggestion) */
+    bool steer_jump;      /* the stick turns a jump in the air (Discord suggestion) */
     int language;               /* the port's own text: PM3DS_LANG_* (pm3ds_lang.h); the console's by default */               /* the HP icon's warning beep at 5 HP or less (src/hud_element.c) */
 } pm3ds_settings_t;
 

@@ -128,6 +128,18 @@ TR("Heart & flower drops", "Herzen & Blumen", "Cœurs et fleurs", "Corazones y f
 TR("Battle HP/FP bar", "KP/BP-Leiste im Kampf", "Barre PV/PF en combat", "Barra PS/PF en combate", "Barra PV/PF in battaglia", "バトルのHP/FPバー")
 TR("Ice Power effect", "Eis-Kraft-Effekt", "Effet Force Glace", "Efecto Poder Hielo", "Effetto Potere Gelo", "アイスパワーの演出")
 TR("Low memory start: close and reopen the game", "Wenig Speicher: Spiel schließen und neu starten", "Peu de mémoire : fermez et relancez le jeu", "Poca memoria: cierra y reabre el juego", "Poca memoria: chiudi e riapri il gioco", "メモリ不足で起動: ゲームを再起動してください")
+TR("Music", "Musik", "Musique", "Música", "Musica", "BGM")
+TR("Sound effects", "Soundeffekte", "Effets sonores", "Efectos de sonido", "Effetti sonori", "効果音")
+TR("Jukebox", "Jukebox", "Juke-box", "Jukebox", "Jukebox", "ジュークボックス")
+TR("Sound", "Ton", "Son", "Sonido", "Audio", "サウンド")
+TR("Plays instead of the area's music", "Läuft statt der Gebietsmusik", "Remplace la musique du lieu", "Suena en vez de la música del lugar", "Al posto della musica della zona", "エリアの曲の代わりに再生")
+TR("Play", "Abspielen", "Jouer", "Reproducir", "Riproduci", "再生")
+TR("Steerable spin", "Lenkbarer Spin", "Vrille dirigeable", "Giro dirigible", "Rotazione guidabile", "スピンで曲がる")
+TR("Steerable jump", "Lenkbarer Sprung", "Saut dirigeable", "Salto dirigible", "Salto guidabile", "ジャンプで曲がる")
+TR("Levels past 27", "Level über 27", "Niveaux après 27", "Niveles tras el 27", "Livelli oltre 27", "レベル27以上")
+TR("To 99, 1+ SP a fight", "Bis 99, mind. 1 SP", "Jusqu'à 99, 1+ PE", "Hasta 99, 1+ PE", "Fino a 99, 1+ PE", "99まで、毎回SP1以上")
+TR("Action commands", "Aktionsbefehle", "Actions", "Acciones", "Azioni", "アクションコマンド")
+TR("From now on", "Ab jetzt", "Dès maintenant", "Desde ahora", "Da ora", "今から")
 TR("Low HP beep", "Warnton bei wenig KP", "Alerte PV bas", "Aviso PS bajos", "Avviso PV bassi", "HPピンチの音")
 
 /* controls */

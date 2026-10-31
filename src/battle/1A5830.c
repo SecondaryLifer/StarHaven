@@ -2754,7 +2754,17 @@ API_CALLABLE(DropStarPoints) {
     }
     numToDrop = ntd;
 
+#ifdef _3DS
+    // cheats.c, GitHub #77: past level 27 and, like TTYD, a fight is worth at least 1 star point
+    extern int pm3ds_max_level(void);
+    if (pm3ds_max_level() > 27 && numToDrop < 1
+        && battleStatus->totalStarPoints == 0 && battleStatus->pendingStarPoints == 0) {
+        numToDrop = 1;
+    }
+    if (playerData->level < pm3ds_max_level()) {
+#else
     if (playerData->level < 27) {
+#endif
         s32 spawnMode;
         s32 i;
 

@@ -107,6 +107,8 @@ void step_game_loop(void) {
     {   // 3DS port: cheats top up HP, FP, star power, coins (cheats.c)
         extern void pm3ds_cheats_step(void);
         extern void pm3ds_qs_step(void);
+        extern void pm3ds_sound_step(void);
+        pm3ds_sound_step();    // Settings > Sound (jukebox.c)
         pm3ds_cheats_step();
         pm3ds_qs_step();       // a quick save loads where Mario stood (quicksave.c)
     }

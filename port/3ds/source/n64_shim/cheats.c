@@ -110,6 +110,11 @@ void pm3ds_cheats_new_game(void) {
 #ifdef PM3DS_TEST_CHEATS
     sAllowed = true;
     sOn = (1u << PM3DS_CHEAT_NOCAP) | (1u << PM3DS_CHEAT_QOL);
+#ifdef PM3DS_TEST_LEVELS
+    sOn |= (1u << PM3DS_CHEAT_LEVELS) | (1u << PM3DS_CHEAT_ACTION);
+    gPlayerData.level = PM3DS_TEST_LEVELS;
+    gPlayerData.starPoints = 99;
+#endif
 #endif
     sHard = sNextHard;
     sNextHard = false;
@@ -220,7 +225,7 @@ static void give_step(void) {
             }
             break;
         case PM3DS_GIVE_LEVEL:
-            if (pd->level < 27) {
+            if (pd->level < pm3ds_max_level()) {
                 pd->level++;
             }
             break;
@@ -263,9 +268,37 @@ static void qol_badges_step(void) {
     wasOn = on;
 }
 
+/* src/battle/level_up.c, src/battle/1A5830.c: 2 digits is what the screens have */
+int pm3ds_max_level(void) {
+    return pm3ds_cheat_on(PM3DS_CHEAT_LEVELS) ? 99 : 27;
+}
+
 /* src/main_loop.c, every game step */
 void pm3ds_cheats_step(void) {
     PlayerData* playerData = &gPlayerData;
+#ifdef PM3DS_STEER_DBG
+    {   /* debug: Mario's motion, for the steerable spin and jump */
+        extern void pm3ds_log(int, const char*, ...);
+        static s32 n, m;
+        extern u16 au_bus_get_volume(u8 busID);
+        if (++m % 150 == 0) pm3ds_log(2, "STEER bus gains %d %d %d %d", au_bus_get_volume(0), au_bus_get_volume(1), au_bus_get_volume(2), au_bus_get_volume(3));
+        {
+            static s32 lastLevel = -1, lastSP = -1, lastAC = -1;
+            if (playerData->level != lastLevel || playerData->starPoints != lastSP || playerData->hasActionCommands != lastAC) {
+                lastAC = playerData->hasActionCommands;
+                pm3ds_log(2, "STEER level %d sp %d maxhp %d maxfp %d maxbp %d ac %d", playerData->level, playerData->starPoints,
+                          playerData->hardMaxHP, playerData->hardMaxFP, playerData->maxBP, playerData->hasActionCommands);
+                lastLevel = playerData->level;
+                lastSP = playerData->starPoints;
+            }
+        }
+        if (gPlayerStatus.actionState != ACTION_STATE_IDLE && ++n % 3 == 0) {
+            pm3ds_log(2, "STEER act %d pos %d,%d yaw %d speed %d stick %d,%d", gPlayerStatus.actionState,
+                      (int)gPlayerStatus.pos.x, (int)gPlayerStatus.pos.z, (int)gPlayerStatus.targetYaw,
+                      (int)(gPlayerStatus.curSpeed * 10), gPlayerStatus.stickAxis[0], gPlayerStatus.stickAxis[1]);
+        }
+    }
+#endif
     qol_badges_step();
     if (sAllowed && (sGivePending >= 0 || sGiveItemName[0] == 0)) {
         give_step();
@@ -284,6 +317,9 @@ void pm3ds_cheats_step(void) {
     }
     if (pm3ds_cheat_on(PM3DS_CHEAT_COINS) && playerData->coins < 999) {
         playerData->coins = 999;
+    }
+    if (pm3ds_cheat_on(PM3DS_CHEAT_ACTION)) {
+        playerData->hasActionCommands = true;
     }
 }
 

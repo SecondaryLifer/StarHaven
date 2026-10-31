@@ -14,6 +14,8 @@ enum {
     PM3DS_CHEAT_BP,       /* equip any badges, whatever their BP */
     PM3DS_CHEAT_NOCAP,    /* level-ups past 50 HP, 50 FP, 30 BP (GitHub #76) */
     PM3DS_CHEAT_QOL,      /* quality-of-life badges cost no BP (Discord suggestion) */
+    PM3DS_CHEAT_LEVELS,   /* levels up to 99, and a won fight gives at least 1 star point (GitHub #77) */
+    PM3DS_CHEAT_ACTION,   /* action commands and guarding from now on, without the Lucky Star (Discord) */
     PM3DS_CHEAT_COUNT,
 };
 
@@ -27,6 +29,7 @@ void pm3ds_cheat_give(int what);
 const char *pm3ds_cheat_give_item(void);    /* the items' and the badges' current choice */
 const char *pm3ds_cheat_give_badge(void);
 
+int pm3ds_max_level(void);                /* 27, or 99 with PM3DS_CHEAT_LEVELS */
 void pm3ds_cheats_choose(bool allowed);   /* the next new game's choice */
 bool pm3ds_cheats_allowed(void);          /* the running game's save allows cheats */
 bool pm3ds_cheat_on(int cheat);

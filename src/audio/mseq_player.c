@@ -263,9 +263,53 @@ void au_mseq_play_sequence(AmbienceManager* manager, MSEQHeader* mseqFile, s32 i
     player->resetRequired = true;
 }
 
+#ifdef _3DS
+// src/audio/ambience.c: the game has wanted no ambience for a while. GitHub #56, on consoles (never in
+// the emulator): the forest's sounds went on in the mansion and everywhere after. Whatever
+// left them on, nothing should be playing here: stop it from the audio thread, and say so in log.txt.
+volatile s32 pm3dsAmbienceCheck;
+
+static void pm3ds_ambience_check(AmbienceManager* manager) {
+    extern void pm3ds_log(int level, const char* fmt, ...);
+    s32 players = 0;
+    s32 voices = 0;
+    s32 i;
+
+    for (i = 0; i < ARRAY_COUNT(manager->players); i++) {
+        AmbiencePlayer* player = &manager->players[i];
+        if (player->mseqReadPos != nullptr && player->mode == MSEQ_MODE_PLAYING) {
+            player->mseqReadPos = nullptr;
+            player->mseqName = 0;
+            player->fadeTime = 0;
+            players++;
+        }
+    }
+    for (i = 0; i < ARRAY_COUNT(manager->globals->voices); i++) {
+        AuVoice* voice = &manager->globals->voices[i];
+        if (voice->priority == manager->priority) {
+            au_reset_voice(voice, i);
+            voices++;
+        }
+    }
+    for (i = 0; i < ARRAY_COUNT(manager->voiceStates); i++) {
+        manager->voiceStates[i].info.all = 0;
+    }
+    if (players != 0 || voices != 0) {
+        pm3ds_log(2, "ambience: stopped %d players, %d voices left on", (int)players, (int)voices);
+    }
+}
+#endif
+
 void au_mseq_manager_audio_frame_update(AmbienceManager* manager) {
     u32 i;
     s32 j;
+
+#ifdef _3DS
+    if (pm3dsAmbienceCheck) {
+        pm3dsAmbienceCheck = false;
+        pm3ds_ambience_check(manager);
+    }
+#endif
 
     for (i = 0; i < ARRAY_COUNT(manager->voiceStates); i++) {
         AmbienceVoiceState* voiceState = &manager->voiceStates[i];

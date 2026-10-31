@@ -2078,21 +2078,27 @@ static bool tmenu_tap(int px, int py) {
 /* ---- Options and Controls pages ------------------------------------------ */
 /* their own rail: Settings, Controls, Debug */
 #define OPT_Y0 BODY_Y
-#define CHEAT_ROW_H 21
+#define CHEAT_ROW_H 17
+/* n64_shim/jukebox.c */
+extern const char *pm3ds_jukebox_name(int i);
+extern int pm3ds_jukebox_count(void);
+extern void pm3ds_sound_changed(void);
+extern void pm3ds_jukebox_changed(void);
 static const char *const s_fps_names[2] = { "30 fps", "60 fps" };
 static const char *const s_text_names[TEXT_SPEEDS] = { "Normal", "Fast", "Instant" };
 
 /* The Settings page: a list in sections, dragged up and down (a scroll bar
  * shows where); a row changes its setting when tapped without dragging. */
 enum { OPT_LANG, OPT_SCREEN, OPT_FPS, OPT_3D, OPT_COLORS, OPT_TEXT, OPT_FF_SPEED, OPT_FF_BUTTON, OPT_DROPS, OPT_BEEP, OPT_DPAD,
-       OPT_AUTOSAVE, OPT_UPDATE, OPT_HUD, OPT_ICE, OPT_COUNT };
+       OPT_AUTOSAVE, OPT_UPDATE, OPT_HUD, OPT_ICE, OPT_MUSIC, OPT_SFX, OPT_JUKEBOX, OPT_STEER_SPIN, OPT_STEER_JUMP, OPT_COUNT };
 #define OPT_HEADER 0x100          /* + section number */
 static const int s_opt_list[] = {
     OPT_HEADER + 0, OPT_LANG, OPT_SCREEN, OPT_FPS, OPT_3D, OPT_COLORS, OPT_HUD, OPT_ICE,
-    OPT_HEADER + 1, OPT_TEXT, OPT_FF_SPEED, OPT_FF_BUTTON, OPT_AUTOSAVE, OPT_DROPS, OPT_BEEP, OPT_DPAD,
-    OPT_HEADER + 2, OPT_UPDATE,
+    OPT_HEADER + 1, OPT_TEXT, OPT_FF_SPEED, OPT_FF_BUTTON, OPT_AUTOSAVE, OPT_DROPS, OPT_BEEP, OPT_DPAD, OPT_STEER_SPIN, OPT_STEER_JUMP,
+    OPT_HEADER + 2, OPT_MUSIC, OPT_SFX, OPT_JUKEBOX,
+    OPT_HEADER + 3, OPT_UPDATE,
 };
-static const char *const s_opt_sections[] = { "Display", "Gameplay", "System" };
+static const char *const s_opt_sections[] = { "Display", "Gameplay", "Sound", "System" };
 #define OPT_LIST_N (int)(sizeof s_opt_list / sizeof s_opt_list[0])
 #define OPT_ROW_PX 23             /* a setting */
 #define OPT_HEAD_PX 17            /* a section title */
@@ -2127,6 +2133,11 @@ static void opt_value(int id, char *buf, size_t size) {
         case OPT_HUD:       v = pm3ds_cfg.battle_hud ? "On" : "Off"; break;
         case OPT_ICE:       v = pm3ds_cfg.ice_fx ? "On" : "Off"; break;
         case OPT_DPAD:      v = pm3ds_cfg.dpad_menus ? "Cursor" : "C buttons"; break;
+        case OPT_MUSIC:     v = pm3ds_cfg.music_on ? "On" : "Off"; break;
+        case OPT_SFX:       v = pm3ds_cfg.sfx_on ? "On" : "Off"; break;
+        case OPT_JUKEBOX:   v = pm3ds_jukebox_name(pm3ds_cfg.jukebox); break;
+        case OPT_STEER_SPIN: v = pm3ds_cfg.steer_spin ? "On" : "Off"; break;
+        case OPT_STEER_JUMP: v = pm3ds_cfg.steer_jump ? "On" : "Off"; break;
         case OPT_AUTOSAVE: {
             static const char *const names[PM3DS_AUTOSAVE_COUNT] = { "Off", "Each area", "5 min", "10 min", "15 min" };
             v = names[pm3ds_cfg.autosave % PM3DS_AUTOSAVE_COUNT];
@@ -2145,7 +2156,7 @@ static void opt_value(int id, char *buf, size_t size) {
 static const char *const s_opt_labels[OPT_COUNT] = {
     "Language", "Screen", "Frame rate", "3D depth", "Colors", "Text speed", "Fast-forward speed", "Fast-forward button",
     "Heart & flower drops", "Low HP beep", "D-pad in menus", "Autosave", "Update check",
-    "Battle HP/FP bar", "Ice Power effect",
+    "Battle HP/FP bar", "Ice Power effect", "Music", "Sound effects", "Jukebox", "Steerable spin", "Steerable jump",
 };
 
 /* Quit game (in game, GitHub #67): back to the title, saving first or not.
@@ -2208,8 +2219,49 @@ static void quit_tick(void) {
     }
 }
 
+/* Jukebox (GitHub #78): a song instead of the area's, from Settings > Sound */
+static bool s_juke;
+static int s_juke_pick;
+#define JUKE_ROW_Y (OPT_Y0 + 34)
+static void draw_jukebox(void) {
+    const char *n = pm3ds_jukebox_name(s_juke_pick);
+    page_title("Jukebox", "Plays instead of the area's music");
+    tile(CX0, JUKE_ROW_Y, CX1, JUKE_ROW_Y + 30, 6, COL_TAB_ON);
+    text(CX0 + 10, JUKE_ROW_Y + 5, "<", 1.1f, 0, COL_GOLD);
+    text_center((CX0 + CX1) / 2, JUKE_ROW_Y + 7, n, fit(n, CX1 - CX0 - 60, 0.95f, 0.5f), 0, COL_WHITE);
+    text(CX1 - 20, JUKE_ROW_Y + 5, ">", 1.1f, 0, COL_GOLD);
+    chip(CX0 + 8, JUKE_ROW_Y + 48, (CX0 + CX1) / 2 - 6, JUKE_ROW_Y + 72, "Play", COL_GOLD, 0.9f);
+    chip((CX0 + CX1) / 2 + 6, JUKE_ROW_Y + 48, CX1 - 8, JUKE_ROW_Y + 72, "Off", pm3ds_cfg.jukebox >= 0 ? COL_SEL : COL_OFF, 0.9f);
+    if (pm3ds_cfg.jukebox >= 0) {
+        const char *cur = pm3ds_jukebox_name(pm3ds_cfg.jukebox);
+        text_center((CX0 + CX1) / 2, JUKE_ROW_Y + 84, cur, fit(cur, CX1 - CX0 - 20, 0.72f, 0.5f), 0, COL_HINT);
+    }
+    button(s_btn_ff, "Back");
+}
+
+static void jukebox_set(int song) {
+    pm3ds_cfg.jukebox = song;
+    pm3ds_settings_save();
+    pm3ds_jukebox_changed();
+}
+
+static void jukebox_tap(int px, int py) {
+    int n = pm3ds_jukebox_count();
+    if (py >= JUKE_ROW_Y && py < JUKE_ROW_Y + 30) {
+        if (px < (CX0 + CX1) / 2) s_juke_pick = (s_juke_pick + n - 1) % n;
+        else s_juke_pick = (s_juke_pick + 1) % n;
+    } else if (py >= JUKE_ROW_Y + 44 && py < JUKE_ROW_Y + 76) {
+        if (px < (CX0 + CX1) / 2) jukebox_set(s_juke_pick);
+        else jukebox_set(-1);
+    }
+}
+
 static void draw_options(void) {
     char buf[48];
+    if (s_juke) {
+        draw_jukebox();
+        return;
+    }
     float max = opt_scroll_max();
     if (s_opt_scroll > max) s_opt_scroll = max;
     if (s_opt_scroll < 0) s_opt_scroll = 0;
@@ -2284,6 +2336,14 @@ static void options_tap(int px, int py) {
                 case OPT_HUD: pm3ds_cfg.battle_hud = !pm3ds_cfg.battle_hud; break;
                 case OPT_ICE: pm3ds_cfg.ice_fx = !pm3ds_cfg.ice_fx; break;
                 case OPT_DPAD: pm3ds_cfg.dpad_menus = !pm3ds_cfg.dpad_menus; break;
+                case OPT_MUSIC: pm3ds_cfg.music_on = !pm3ds_cfg.music_on; pm3ds_sound_changed(); break;
+                case OPT_SFX: pm3ds_cfg.sfx_on = !pm3ds_cfg.sfx_on; pm3ds_sound_changed(); break;
+                case OPT_JUKEBOX:
+                    s_juke = true;
+                    if (pm3ds_cfg.jukebox >= 0) s_juke_pick = pm3ds_cfg.jukebox;
+                    return;
+                case OPT_STEER_SPIN: pm3ds_cfg.steer_spin = !pm3ds_cfg.steer_spin; break;
+                case OPT_STEER_JUMP: pm3ds_cfg.steer_jump = !pm3ds_cfg.steer_jump; break;
                 case OPT_AUTOSAVE: pm3ds_cfg.autosave = (uint8_t)((pm3ds_cfg.autosave + 1) % PM3DS_AUTOSAVE_COUNT); break;
                 case OPT_COLORS:
                     pm3ds_cfg.color_mode = (uint8_t)((pm3ds_cfg.color_mode + 1) % PM3DS_COLOR_COUNT);
@@ -2319,10 +2379,10 @@ static void draw_controls(void) {
 
 /* a save's cheats, each switched on its own (n64_shim/cheats.c) */
 static const char *const s_cheat_names[PM3DS_CHEAT_COUNT] = {
-    "Infinite HP", "Infinite FP", "Infinite Star Power", "999 coins", "Unlimited BP", "No level-up limits", "Free QoL badges",
+    "Infinite HP", "Infinite FP", "Infinite Star Power", "999 coins", "Unlimited BP", "No level-up limits", "Free QoL badges", "Levels past 27", "Action commands",
 };
 static const char *const s_cheat_help[PM3DS_CHEAT_COUNT] = {
-    "Stays full", "Stays full", "Stays full", "Stays at 999", "Any badges fit", "Up to 95 HP, FP, 99 BP", "Speedy Spin, I Spy...",
+    "Stays full", "Stays full", "Stays full", "Stays at 999", "Any badges fit", "Up to 95 HP, FP, 99 BP", "Speedy Spin, I Spy...", "To 99, 1+ SP a fight", "From now on",
 };
 
 /* Cheats' second page, "Start with" from the Discord: extras for this file, whenever */
@@ -2358,9 +2418,9 @@ static void draw_cheats(void) {
         float y = OPT_Y0 + i * CHEAT_ROW_H;
         bool on = pm3ds_cheat_on(i);
         tile(CX0, y, CX1, y + CHEAT_ROW_H - 3, 6, on ? COL_SEL : COL_TAB_ON);
-        text(CX0 + 7, y + 1, s_cheat_names[i], fit(s_cheat_names[i], 112, 0.82f, 0.6f), 0, COL_WHITE);
-        text(CX0 + 124, y + 3, s_cheat_help[i], fit(s_cheat_help[i], 96, 0.62f, 0.5f), 0, COL_HINT);
-        chip(266, y + 2, CX1 - 4, y + CHEAT_ROW_H - 5, on ? "On" : "Off", on ? COL_GOLD : COL_OFF, 0.75f);
+        text(CX0 + 7, y, s_cheat_names[i], fit(s_cheat_names[i], 112, 0.72f, 0.5f), 0, COL_WHITE);
+        text(CX0 + 124, y + 1, s_cheat_help[i], fit(s_cheat_help[i], 96, 0.58f, 0.45f), 0, COL_HINT);
+        chip(270, y + 1, CX1 - 4, y + CHEAT_ROW_H - 4, on ? "On" : "Off", on ? COL_GOLD : COL_OFF, 0.6f);
     }
     button(s_btn_opt, "Give");
     button(s_btn_ff, "Back");
@@ -2863,7 +2923,7 @@ static void handle_touch(void) {
     {   /* the Settings list: drag to scroll, a tap acts on release */
         static bool opt_held;
         static int opt_x0, opt_y0, opt_prev_y, opt_moved;
-        bool on_list = s_tab == TAB_OPTIONS && !s_quit && s_ng_page == NG_CLOSED && !import_notice_up() && !update_notice_up();
+        bool on_list = s_tab == TAB_OPTIONS && !s_quit && !s_juke && s_ng_page == NG_CLOSED && !import_notice_up() && !update_notice_up();
         if (pressed && on_list && in(tp.px, tp.py, CX0 - 4, OPT_Y0, CX1 + 4, OPT_LIST_Y1)) {
             opt_held = true;
             opt_x0 = tp.px; opt_y0 = opt_prev_y = tp.py;
@@ -2936,6 +2996,7 @@ static void handle_touch(void) {
         rail_tab_t tabs[4];
         int ids[4], r = s_quit ? -1 : rail_hit(tp.px, tp.py, opt_rail(tabs, ids));
         if (r >= 0) {
+            s_juke = false;
             s_tab = ids[r];
             return;
         }
@@ -2960,6 +3021,11 @@ static void handle_touch(void) {
         return;
     }
     if (s_tab == TAB_OPTIONS) {
+        if (s_juke) {
+            if (back) s_juke = false;
+            else jukebox_tap(tp.px, tp.py);
+            return;
+        }
         if (s_quit) {
             if (back) s_quit = 0;
             else quit_tap(tp.px, tp.py);

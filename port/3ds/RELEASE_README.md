@@ -94,6 +94,11 @@ The tabs run down the left side:
     elsewhere; battles stay at 30.
   - **Text speed**: Normal, Fast or Instant.
   - **Fast-forward**: speed (2x to 4x), and whether the button is held or toggles.
+  - **Steerable spin** and **Steerable jump**: the Circle Pad turns a spin dash or a jump while it
+    happens. Off by default, so Mario moves as in the original.
+  - **Music** and **Sound effects**: switch either off (sound effects includes the areas'
+    background sounds).
+  - **Jukebox**: pick a song that plays instead of the area's music. Battles keep their own.
   - **Update check**: when Star Haven starts, it asks GitHub whether a newer version is out
     and, if so, says so on the bottom screen (*Skip* stops it mentioning that version). It
     downloads and installs nothing. Off here, from the next start.
@@ -124,7 +129,9 @@ where everything went. The seed is shown on the Stats tab.
 
 The new-file screen also has a **Cheats** switch. Turn it on and that file gets a **Cheats** tab
 under Options, where you switch each one on or off: infinite HP (Mario can't be knocked out),
-infinite FP, infinite Star Power, 999 coins and unlimited BP (equip any badges). The switches
+infinite FP, infinite Star Power, 999 coins, unlimited BP (equip any badges), no level-up limits,
+free quality-of-life badges, levels past 27 (up to 99, and a won fight gives at least 1 star point)
+and action commands from the moment you switch it on. The switches
 are saved with the file. This is only chosen when the file is made: a file started with the
 switch off never shows cheats and can't turn them on later.
 

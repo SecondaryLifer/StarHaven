@@ -849,6 +849,29 @@ void pm3ds_game_debug_tick(u32 frame) {
         }
     }
 #endif
+#ifdef PM3DS_AMB_CYCLE
+    {   /* debug: Boo's Mansion's yard, the gate room, back, the mansion, over and over with
+         * changing waits (GitHub #56: the forest's ambience stayed on inside) */
+        extern bool pm3ds_debug_new_game_made;
+        static s32 frames, step, wait = 200, n;
+        if (pm3ds_debug_new_game_made && gGameStatusPtr != nullptr && get_game_mode() == GAME_MODE_WORLD
+            && gGameStatusPtr->context == CONTEXT_WORLD && ++frames >= wait) {
+            static const struct { s16 area, map, entry; } route[] = {
+                { AREA_MIM, 11, 0 }, { AREA_MIM, 10, 1 }, { AREA_OBK, 0, 0 }, { AREA_MIM, 10, 0 },
+            };
+            s32 i = step++ % 4;
+            frames = 0;
+            n++;
+            wait = 25 + (n * 37) % 170;
+            pm3ds_log(2, "AMBCYCLE %d to %d.%d wait %d", (int)n, route[i].area, route[i].map, (int)wait);
+            gGameStatusPtr->areaID = route[i].area;
+            gGameStatusPtr->mapID = route[i].map;
+            gGameStatusPtr->entryID = route[i].entry;
+            set_map_transition_effect(TRANSITION_STANDARD);
+            set_game_mode(GAME_MODE_CHANGE_MAP);
+        }
+    }
+#endif
 #ifdef PM3DS_FLAME_TEST
     {   /* debug: the Super Block's three motion-blur flames around Mario, as in its upgrade (GitHub #57) */
         static s32 worldFrames;

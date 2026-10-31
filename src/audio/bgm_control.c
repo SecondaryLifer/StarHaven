@@ -185,6 +185,63 @@ void bgm_update_music_control(void) {
     bgm_update_volume();
 }
 
+#ifdef _3DS
+#include "game_modes.h"
+
+s32 _bgm_set_song(s32 playerIndex, s32 songID, s32 variation, s32 fadeOutTime, s16 volume);
+
+// Jukebox (GitHub #78, n64_shim/jukebox.c): its song replaces the songs the world asks for on the
+// main player. Battles keep their own music: a push is the battle's song, and the pop that ends it
+// goes back to the jukebox or to the song the world last asked for.
+extern s32 pm3ds_jukebox_song(void);
+static s32 pm3dsWorldSong = AU_SONG_NONE;
+static s32 pm3dsWorldVariation = 0;
+
+static void pm3ds_jukebox_filter(s32 playerIndex, s32* songID, s32* variation) {
+    MusicControlData* music = &gMusicControlData[0];
+    s16 mode = get_game_mode();
+    s32 jukebox;
+
+    if (playerIndex != 0 || gGameStatusPtr->context != CONTEXT_WORLD || mode == GAME_MODE_TITLE_SCREEN
+        || mode == GAME_MODE_INTRO || mode == GAME_MODE_LOGOS || (music->flags & MUSIC_FLAG_PUSHING)) {
+        return;
+    }
+    if (!(music->flags & MUSIC_FLAG_POPPING)) {
+        pm3dsWorldSong = *songID;
+        pm3dsWorldVariation = *variation;
+    }
+    jukebox = pm3ds_jukebox_song();
+    if (jukebox >= 0 && *songID >= 0) {
+        *songID = jukebox;
+        *variation = 0;
+    } else if ((music->flags & MUSIC_FLAG_POPPING) && pm3dsWorldSong >= 0) {
+        *songID = pm3dsWorldSong;
+        *variation = pm3dsWorldVariation;
+    }
+#ifdef PM3DS_STEER_DBG
+    {
+        extern void pm3ds_log(int, const char*, ...);
+        pm3ds_log(2, "STEER song %d var %d, world %d jukebox %d", (int)*songID, (int)*variation, (int)pm3dsWorldSong, (int)jukebox);
+    }
+#endif
+}
+
+// a game step after the Jukebox page changed the choice
+void pm3ds_bgm_jukebox_changed(void) {
+    s32 song = pm3dsWorldSong;
+    if (song >= 0 || pm3ds_jukebox_song() >= 0) {
+        gMusicControlData[0].flags &= ~MUSIC_FLAG_POPPING;
+        _bgm_set_song(0, song >= 0 ? song : pm3ds_jukebox_song(), pm3dsWorldVariation, 500, VOL_LEVEL_FULL);
+    }
+}
+
+// a game step after Settings > Sound changed (and the first one): applies the switches
+void pm3ds_bgm_update_bus(void) {
+    snd_set_bgm_volume(MusicCurrentVolume);
+    snd_set_sfx_volume(VOL_LEVEL_FULL);
+}
+#endif
+
 s32 _bgm_set_song(s32 playerIndex, s32 songID, s32 variation, s32 fadeOutTime, s16 volume) {
     MusicControlData* music;
     s32 mapSongVariation;
@@ -201,6 +258,15 @@ s32 _bgm_set_song(s32 playerIndex, s32 songID, s32 variation, s32 fadeOutTime, s
         return 1;
     }
 
+#ifdef _3DS
+    pm3ds_jukebox_filter(playerIndex, &songID, &variation);
+#ifdef PM3DS_STEER_DBG
+    {
+        extern void pm3ds_log(int, const char*, ...);
+        pm3ds_log(2, "STEER set_song %d player %d context %d flags %x", (int)songID, (int)playerIndex, gGameStatusPtr->context, music->flags);
+    }
+#endif
+#endif
     mapSongVariation = bgm_get_map_default_variation(songID);
     if (mapSongVariation >= 0) {
         variation = mapSongVariation;
@@ -249,6 +315,9 @@ bool bgm_fade_in_song(s32 playerIndex, s32 songID, s32 variation, s32 fadeInTime
         return true;
     }
 
+#ifdef _3DS
+    pm3ds_jukebox_filter(playerIndex, &songID, &variation);
+#endif
     mapSongVariation = bgm_get_map_default_variation(songID);
     if (mapSongVariation >= 0) {
         variation = mapSongVariation;

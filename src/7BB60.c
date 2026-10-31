@@ -616,6 +616,27 @@ void collision_main_lateral(void) {
                 speed = 0.0f;
                 if (!(playerStatus->flags & (PS_FLAG_SCRIPTED_FALL | PS_FLAG_INPUT_DISABLED))) {
                     player_input_to_move_vector(&yaw, &speed);
+#ifdef _3DS
+                    {
+                        // Steerable jump (Settings, Discord suggestion): the stick turns the jump's
+                        // run-up speed in the air, a limited amount per step. N64 kept it on the
+                        // take-off heading and only added the small push below.
+                        extern bool pm3ds_steer_jump(void);
+                        if (pm3ds_steer_jump() && speed != 0.0f && gGameStatusPtr->demoState == DEMO_STATE_NONE
+                            && (playerStatus->flags & (PS_FLAG_FALLING | PS_FLAG_JUMPING))
+                            && (playerStatus->actionState == ACTION_STATE_JUMP
+                                || playerStatus->actionState == ACTION_STATE_HOP
+                                || playerStatus->actionState == ACTION_STATE_FALLING)) {
+                            f32 delta = get_clamped_angle_diff(playerStatus->targetYaw, yaw);
+                            if (delta > 15.0f) {
+                                delta = 15.0f;
+                            } else if (delta < -15.0f) {
+                                delta = -15.0f;
+                            }
+                            playerStatus->targetYaw = clamp_angle(playerStatus->targetYaw + delta);
+                        }
+                    }
+#endif
                     if (!(playerStatus->animFlags & PA_FLAG_SPINNING)) {
                         speed *= 0.03125f;
                         if (!(playerStatus->flags & (PS_FLAG_FALLING | PS_FLAG_JUMPING))) {

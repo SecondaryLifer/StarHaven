@@ -20,6 +20,13 @@
 #include "sprite/player.h"
 
 #ifdef _3DS
+extern int pm3ds_max_level(void);   // cheats.c: levels past 27 (GitHub #77)
+#define PM3DS_LEVEL_CAP pm3ds_max_level()
+#else
+#define PM3DS_LEVEL_CAP 27
+#endif
+
+#ifdef _3DS
 // n64_shim/cheats.c, GitHub #76: the stat limits, raised by a cheat
 extern s32 pm3ds_cap_hpfp(void);
 extern s32 pm3ds_cap_bp(void);
@@ -740,14 +747,14 @@ void btl_state_update_celebration(void) {
                         playerData->starPoints++;
                     }
                 }
-                if (playerData->level >= 27) {
+                if (playerData->level >= PM3DS_LEVEL_CAP) {
                     playerData->starPoints = 0;
                 }
                 if (playerData->starPoints >= 100) {
                     pendingLevelUps = 1;
                     playerData->starPoints -= 100;
                 }
-                if (playerData->level + pendingLevelUps == 27) {
+                if (playerData->level + pendingLevelUps == PM3DS_LEVEL_CAP) {
                     playerData->starPoints = 0;
                 }
                 if (battleStatus->totalStarPoints == 0) {

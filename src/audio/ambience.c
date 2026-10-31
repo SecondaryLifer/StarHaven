@@ -67,6 +67,23 @@ void update_ambient_sounds(void) {
     }
 #endif
 
+#ifdef _3DS
+    {
+        // mseq_player.c, GitHub #56: 2 s after the last ambience ended, nothing may be left of it
+        extern volatile s32 pm3dsAmbienceCheck;
+        static s32 silentSteps;
+        if (ambientSoundState->fadeState == AMBIENCE_STATE_IDLE && ambientSoundState->soundID < 0
+            && !(ambientSoundState->flags & AMBIENCE_FLAG_PLAYING)) {
+            if (++silentSteps >= 60) {
+                silentSteps = 0;
+                pm3dsAmbienceCheck = true;
+            }
+        } else {
+            silentSteps = 0;
+        }
+    }
+#endif
+
     switch (ambientSoundState->fadeState) {
         case AMBIENCE_STATE_IDLE:
             break;
