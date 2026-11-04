@@ -236,7 +236,18 @@ static bool load(const char* id) {
         fclose(f);
         return false;
     }
-    u32 n = rd32(h + 8), size = rd32(h + 12);
+    u32 n = rd32(h + 8), size = rd32(h + 12);   /* n <= LP_MAX_MSGS (read_header) */
+    long file_len = -1;
+    if (fseek(f, 0, SEEK_END) == 0) {
+        file_len = ftell(f);
+    }
+    if (file_len < 0 || fseek(f, LP_HEADER, SEEK_SET) != 0 ||
+        (unsigned long)file_len < (unsigned long)LP_HEADER + n * 12ul ||
+        size != (unsigned long)file_len - LP_HEADER - n * 12ul) {
+        pm3ds_log(PM3DS_LOG_WARN, "language pack %s: its size doesn't match its header", id);
+        fclose(f);
+        return false;
+    }
     u8* raw = malloc(n * 12 + 1);
     s_entries = malloc(n * sizeof(LpEntry) + 1);
     if (raw == nullptr || s_entries == nullptr || fread(raw, 12, n, f) != n) {
