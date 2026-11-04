@@ -442,8 +442,13 @@ static void upload_rgba8(C3D_Tex *tex, const u8 *rgba, int w, int h);
 
 /* the slot holding glyph, decoding it if needed; -1 if the font isn't loaded or
  * every slot is in use this frame (the GPU draws the frame later: a slot drawn
- * in it can't be overwritten) */
-static int iq_slot(int glyph) {
+ * in it can't be overwritten). The font's glyphs have an outline (index 6
+ * around the fill, index 1), so they take the palette of the text around them
+ * like the game font's Latin glyphs (build_font): std_pal MSG_PAL_STANDARD,
+ * dark with a light edge, else MSG_PAL_WHITE. A tint over a single colour
+ * would merge the two into a blob. */
+static int iq_slot(int glyph, bool std_pal) {
+    int key = glyph | (std_pal ? 0x1000 : 0);
     pm3ds_ui_font_t f;
     if (!pm3ds_ui_get_font(&f)) return -1;
     if (!s_iq_ok) {
@@ -456,14 +461,15 @@ static int iq_slot(int glyph) {
         s_iq_ok = true;
     }
     for (int i = 0; i < IQ_SLOTS; i++)
-        if (s_iq_glyph[i] == glyph) { s_iq_used[i] = s_ui_frame; return i; }
+        if (s_iq_glyph[i] == key) { s_iq_used[i] = s_ui_frame; return i; }
     for (int tries = 0; tries < IQ_SLOTS; tries++) {
         int i = s_iq_next;
         s_iq_next = (s_iq_next + 1) % IQ_SLOTS;
         if (s_iq_glyph[i] >= 0 && s_iq_used[i] == s_ui_frame) continue;
-        pm3ds_ui_image_t im = { charset_standard_OFFSET + (size_t)glyph * 128, f.palettes, 16, 16, UI_FMT_CI4 };
-        decode_image(&im, s_iq_canvas, IQ_COLS * 16, (i % IQ_COLS) * 16, (i / IQ_COLS) * 16);  /* MSG_PAL_WHITE */
-        s_iq_glyph[i] = (int16_t)glyph;
+        pm3ds_ui_image_t im = { charset_standard_OFFSET + (size_t)glyph * 128,
+                                f.palettes + (std_pal ? 0x0A : 0x00) * 8, 16, 16, UI_FMT_CI4 };
+        decode_image(&im, s_iq_canvas, IQ_COLS * 16, (i % IQ_COLS) * 16, (i / IQ_COLS) * 16);
+        s_iq_glyph[i] = (int16_t)key;
         s_iq_used[i] = s_ui_frame;
         s_iq_dirty = true;
         return i;
@@ -490,14 +496,14 @@ static bool is_sys_sheet(const C3D_Tex *t) {
  * returns its advance */
 static void quad2(C3D_Tex *t, float x0, float y0, float x1, float y1,
                   float u0, float v0, float u1, float v1, u32 ct, u32 cb);
-static float sys_glyph(float x, float y, uint32_t cp, float scale, u32 c, bool draw) {
+static float sys_glyph(float x, float y, uint32_t cp, float scale, u32 c, bool draw, bool std_pal) {
 #if VERSION_IQUE
     /* text sizes: the ROM's font, like the game's own text (the built-in pixel
      * font stays for the small sizes, where it is sharper) */
     int iq = scale >= 0.78f || cjk_index(cp) < 0 ? iq_glyph_of(cp) : -1;
     if (iq >= 0) {
         if (draw) {
-            int slot = iq_slot(iq);
+            int slot = iq_slot(iq, std_pal);
             if (slot >= 0) {
                 float gx = (slot % IQ_COLS) * 16.0f, gy = (slot / IQ_COLS) * 16.0f, n = IQ_COLS * 16.0f;
                 quad2(&s_iq, x, y + 0.5f * scale, x + 16 * scale, y + 15.5f * scale,
@@ -507,6 +513,8 @@ static float sys_glyph(float x, float y, uint32_t cp, float scale, u32 c, bool d
         return 16 * scale;
     }
 #endif
+    /* the alpha-only fonts: game-font text in the standard palette is dark */
+    if (std_pal) c = (c & 0xFF000000u) | 0x303030;
     int ci = cjk_index(cp);
     if (ci >= 0 && cjk_build()) {
         /* 10 px under 0.9 (small text, list rows), else 12 px; 1:1 near the size
@@ -629,7 +637,7 @@ static float text_width(const char *s, float scale) {
         int len;
         uint32_t cp = pm3ds_txt_next(s, &len);
         s += len;
-        if (cp & 0x80000000u) { w += sys_glyph(0, 0, cp & 0x1FFFFF, scale, 0, false); continue; }
+        if (cp & 0x80000000u) { w += sys_glyph(0, 0, cp & 0x1FFFFF, scale, 0, false, false); continue; }
         int g = glyph_of((char)cp);
         w += (g >= 0 && g < s_glyphs ? s_glyph_w[g] : 5) * scale;
     }
@@ -643,7 +651,7 @@ static float text(float x, float y, const char *s, float scale, int white, u32 c
     for (int len; *s; s += len) {
         uint32_t cp = pm3ds_txt_next(s, &len);
         if (cp & 0x80000000u) {   /* not in the game's font (Japanese) */
-            x += sys_glyph(x, y, cp & 0x1FFFFF, scale, white ? c : (c & 0xFF000000u) | 0x303030, true);
+            x += sys_glyph(x, y, cp & 0x1FFFFF, scale, c, true, !white);
             continue;
         }
         int g = glyph_of((char)cp);
@@ -677,7 +685,7 @@ static float small_text(float x, float y, const char *str, int max_cols, u32 c) 
         uint32_t cp = pm3ds_txt_next(str, &len);
         if (col >= max_cols) { col = 0; x = x0 + 16; y += 9; }   /* continuation lines indented */
         if (cp & 0x80000000u) {   /* Japanese: the system font, about the 8x8 size */
-            sys_glyph(x - 1, y - 2, cp & 0x1FFFFF, 0.72f, c, true);
+            sys_glyph(x - 1, y - 2, cp & 0x1FFFFF, 0.72f, c, true, false);
             x += 10; col += 1;
             continue;
         }
@@ -1226,7 +1234,7 @@ static int wrap_text(const char *str, float scale, float width, short *start, sh
                 /* Chinese and Japanese: a line may break before any character
                  * but closing punctuation */
                 cp &= 0x1FFFFF;
-                cw = sys_glyph(0, 0, cp, scale, 0, false);
+                cw = sys_glyph(0, 0, cp, scale, 0, false, false);
                 if (!(cp == 0x3001 || cp == 0x3002 || (cp >= 0xFF01 && cp <= 0xFF1F && cp != 0xFF08) ||
                       cp == 0x2026 || cp == 0x300D || cp == 0x300F)) last_space = j;
             } else {
@@ -1246,13 +1254,20 @@ static int wrap_text(const char *str, float scale, float width, short *start, sh
     return n;
 }
 
-/* the number after key in a tattle ("Max HP: 2"), -1 if it isn't there */
+/* the number after key in a tattle ("Max HP: 2"), -1 if it isn't there. The
+ * tattle is in the game's language, which needn't be the bottom screen's (the
+ * iQue ROM is Chinese, the EU ROM any of five): every language's key is tried. */
 static int tattle_stat(const char *t, const char *key) {
-    const char *p = strstr(t, key);
-    if (!p) return -1;
-    p += strlen(key);
-    while (*p == ' ') p++;
-    return *p >= '0' && *p <= '9' ? atoi(p) : -1;
+    for (int lang = 0; lang < PM3DS_LANG_COUNT; lang++) {
+        char k[48];
+        pm3ds_lang_encode(pm3ds_lang_utf8(lang, key), k, sizeof k);
+        const char *p = strstr(t, k);
+        if (!p) continue;
+        p += strlen(k);
+        while (*p == ' ') p++;
+        if (*p >= '0' && *p <= '9') return atoi(p);
+    }
+    return -1;
 }
 
 static void log_open(int i) {
@@ -3628,7 +3643,7 @@ static void small_text_center_in(float cx, float y, const char *str, float scale
     for (int len; *str; str += len) {
         uint32_t cp = pm3ds_txt_next(str, &len);
         if (cp & 0x80000000u) {   /* Chinese, Japanese */
-            sys_glyph(x - scale, y - 2 * scale, cp & 0x1FFFFF, 0.72f * scale, c, true);
+            sys_glyph(x - scale, y - 2 * scale, cp & 0x1FFFFF, 0.72f * scale, c, true, false);
             x += 10 * scale;
             continue;
         }

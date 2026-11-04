@@ -142,6 +142,21 @@ typedef struct {
     char detail[48];
 } rom_status_t;
 
+#if !VERSION_IQUE
+/* the iQue Player's dump: 40 MB, an N64 header with a blank name and game ID */
+static bool is_ique_rom(FILE *f, long sz) {
+    uint8_t h[64];
+    if (sz != 0x2800000 || fread(h, 1, sizeof h, f) != sizeof h) return false;
+    rewind(f);
+    int order = detect_order(h);
+    if (order == ORDER_UNKNOWN) return false;
+    to_z64(h, sizeof h, order);
+    for (int i = 0x20; i < 0x3F; i++)   /* name, then the game ID */
+        if (h[i] != 0 && !(i >= 0x34 && i < 0x3B)) return false;
+    return true;
+}
+#endif
+
 /* Read one candidate through (ROM_SIZE bytes), converting to .z64 order and
  * checking the CRC as it goes. Returns true if it is the right ROM. */
 static bool load_candidate(const char *path, rom_status_t *st) {
@@ -151,6 +166,15 @@ static bool load_candidate(const char *path, rom_status_t *st) {
     fseek(f, 0, SEEK_END);
     long sz = ftell(f);
     rewind(f);
+#if !VERSION_IQUE
+    if (is_ique_rom(f, sz)) {   /* the other app's ROM: say which one it needs */
+        fclose(f);
+        snprintf(st->reason, sizeof st->reason, "This is the iQue ROM");
+        snprintf(st->detail, sizeof st->detail, "it needs Star Haven iQue");
+        pm3ds_log(PM3DS_LOG_WARN, "rom: %s is the iQue ROM", path);
+        return false;
+    }
+#endif
     if (sz < (long)s_want_size || sz > (long)ROM_MAX_FILE) {
         fclose(f);
         snprintf(st->reason, sizeof st->reason, "Wrong file size");
@@ -209,6 +233,14 @@ static bool load_candidate(const char *path, rom_status_t *st) {
         pm3ds_log(PM3DS_LOG_WARN, "rom: %s does not start with an N64 header", path);
         return false;
     }
+#if VERSION_IQUE
+    if (other_game && is_pm && (region == 'E' || region == 'P')) {   /* the other app's ROM */
+        snprintf(st->reason, sizeof st->reason, "This is not the iQue ROM");
+        snprintf(st->detail, sizeof st->detail, "it needs Star Haven (USA/Europe)");
+        pm3ds_log(PM3DS_LOG_WARN, "rom: %s is the %s ROM", path, region == 'E' ? "US" : "EU");
+        return false;
+    }
+#endif
     if (other_game) {
         snprintf(st->reason, sizeof st->reason, "This is not the right ROM");
         snprintf(st->detail, sizeof st->detail, "%s game ID %.4s, needs " PM3DS_ROM_GAME_ID,

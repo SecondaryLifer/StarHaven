@@ -59,6 +59,14 @@ to the make line (output `PaperMario3DS_us.3dsx`). With both built,
 `python3 /project/port/3ds/tools/universal.py` (in the image) links them into one program,
 `port/3ds/StarHaven_universal.elf`, which picks the copy that matches the ROM at boot.
 
+The iQue build (the iQue Player's Chinese release) is its own program: with the iQue ROM at
+`ver/ique/baserom.z64`, split it (`tools/extract_assets.py ver/ique/baserom.z64`), run
+`tools/gen_version_headers.sh ique` and `PM3DS_VERSION=ique tools/gen_include_assets.py`, then
+make with `PM3DS_VERSION=ique` (output `PaperMario3DS_ique.3dsx`). A third copy of the game
+doesn't fit beside the other two in the universal program, so `PM3DS_VERSION=ique
+tools/package.sh` gives it its own title ID (`0x92B9A`) and icon: `StarHaven_iQue.cia` installs
+next to `StarHaven.cia`. Details in `docs/jp_ique_support.md`.
+
 ## Releases (no game data)
 
 `tools/package.sh <game.elf> <outdir> [3dsx] [cia]` makes the packages players get:
@@ -74,6 +82,8 @@ python3 port/3ds/tools/gen_include_assets.py      # also writes build_assets/man
 bash port/3ds/tools/package.sh port/3ds/PaperMario3DS.elf out/        # out/StarHaven.cia, .3dsx
 # the release package: both versions in one (needs ver/pal and ver/us)
 PM3DS_VERSION=universal bash port/3ds/tools/package.sh port/3ds/StarHaven_universal.elf out/
+# the iQue app (needs ver/ique)
+PM3DS_VERSION=ique bash port/3ds/tools/package.sh port/3ds/PaperMario3DS_ique.elf out/ique/
 ```
 It needs `makerom` (3DSGuy/Project_CTR) at `port/3ds/local/bin/makerom` or `$MAKEROM`.
 The icon and banner (`cia/icon.icn`, `cia/banner.bnr`) come from `tools/make_branding.py`

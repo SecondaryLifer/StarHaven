@@ -418,6 +418,11 @@ void filemenu_yesno_handle_input(MenuPanel* menu) {
 #ifdef PM3DS_START_HP   /* e.g. -DPM3DS_START_HP=5: low HP (its warning beep) */
                         gPlayerData.curHP = PM3DS_START_HP;
 #endif
+#ifdef PM3DS_START_TATTLED   /* every enemy tattled: the bottom screen's tattle log is full */
+                        for (s32 t = 0; t <= GB_Tattles_1C - GB_Tattles_00; t++) {
+                            set_global_byte(EVT_INDEX_OF_GAME_BYTE(GB_Tattles_00) + t, 0xFF);
+                        }
+#endif
 #ifdef PM3DS_START_PARTNER   /* e.g. -DPM3DS_START_PARTNER=PARTNER_BOW for scenes that need one */
                         gPlayerData.partners[PM3DS_START_PARTNER].enabled = true;
                         gPlayerData.curPartner = PM3DS_START_PARTNER;

@@ -1,6 +1,6 @@
 # Japanese (Mario Story, NMQJ) and iQue (Chinese) versions
 
-Status: groundwork only. Nothing has been built for JP yet: that needs the
+Status: iQue builds and runs (see its section). JP: groundwork only, nothing built yet: that needs the
 player's Japanese ROM as `ver/jp/baserom.z64` (SHA1 in `ver/jp/checksum.sha1`,
 `b9cca3ff260b9ff427d981626b82f96de73586d3`, 40 MB).
 
@@ -94,17 +94,43 @@ Needs the iQue ROM as `ver/ique/baserom.z64` (SHA1
 - Not needed here: their icon-address and `load_font_data` changes (this
   tree's `ld_addrs.h` already defines `icon_ROM_START` as the cart address, and
   `dma_copy` copies host pointers and invalidates the texture cache).
-- Left for when the ROM is here, in this order:
-  1. `tools/extract_assets.py`, `tools/gen_version_headers.sh ique`,
-     `PM3DS_VERSION=ique tools/gen_include_assets.py`, a first link and
-     `tools/gen_link_syms.py` for `m11_syms_ique.ld` (their fork has one to
-     compare with).
-  2. `make PM3DS_VERSION=ique`, then boot: logos, title, file select (the
-     file menu's Chinese glyphs), a new game, a battle.
-  3. The bottom screen with the ROM's font: item and enemy names, a tattle
-     (its stat line looks for "Max HP:", which the Chinese text may not have).
-  4. Their GitHub #72 reports, against the port rather than their fork: the
-     ground's texture, the enemy that stays in the tree after the wrong-tree
-     fight, the heart block.
-  5. Packaging: its own `StarHaven_iQue.cia`, or a third copy in the
-     universal one if it fits.
+- With the ROM (2026-11-04), building it took no change to the game's code:
+  1. `tools/extract_assets.py ver/ique/baserom.z64` (splat, about 20 s; put
+     back `assets/.extract.stamp` and `ver/ique/asm/header.s` afterwards, splat
+     rewrites both), `tools/gen_version_headers.sh ique` (needs `ninja`: `pip
+     install ninja` into the venv; iQue's `icon_offsets.h` is PAL's),
+     `PM3DS_VERSION=ique tools/gen_include_assets.py` (1656 written, the same 323
+     PAL-only misses as US).
+  2. `make PM3DS_VERSION=ique` compiles as is; the first link's 305 undefined
+     symbols are all overlay addresses: `PM3DS_VERSION=ique
+     tools/gen_link_syms.py <build log>` writes `m11_syms_ique.ld` (191 of
+     them) and the second link works.
+  3. In Azahar: logos, the Chinese title, attract demo at 60 fps; the new-game
+     picker, the name keyboard, the prologue, a battle (names, targets, action
+     commands, partner menu), the tattle log (141 enemies). The map sweep
+     (`PM3DS_MAP_SWEEP=150`, two runs, `PM3DS_SWEEP_FIRST_AREA=20` for the
+     second) visited every map without an error; the screenshots show nothing
+     wrong. Only tst_12, a test map the game never loads, fills the effect table,
+     and the US build does the same there. The battle sweep (`PM3DS_BATTLE_SWEEP=240`)
+     ran every formation it reached without one.
+- Fixed with the ROM:
+  - The ROM font's glyphs have an outline (index 6 around the fill, index 1).
+    The bottom screen tinted them white-palette, so text came out as dark
+    blobs; `iq_slot` now decodes each glyph in the palette of the text around
+    it (MSG_PAL_STANDARD or MSG_PAL_WHITE), one cache slot per pair.
+  - The tattle's stat line: `tattle_stat` tries the key in every language
+    (`pm3ds_lang_utf8`), as the tattle is in the game's language. The Chinese
+    UI strings (最大HP：, 攻击力：, 防御力：) are the iQue tattles' words.
+  - The EU/US program recognises the iQue dump (40 MB, blank name and game ID)
+    and says it needs Star Haven iQue; the iQue program says the same about the
+    US and EU ROMs.
+- Packaging: one copy of the game takes about 22 MB (text, data, bss), the
+  EU+US program 44 MB, and with the EU ROM about 5 MB is left: a third copy
+  doesn't fit. `PM3DS_VERSION=ique tools/package.sh` makes its own
+  `StarHaven_iQue.cia` / `.3dsx`: UniqueId `0x92B9A`, product code `CTR-H-STHQ`,
+  `cia/icon_ique.icn` ("Star Haven iQue"), so it installs beside
+  `StarHaven.cia`. romdata strips 3464 objects (data CRC32 `281426A5`); the
+  packaged 3dsx puts them back from the ROM and plays.
+- Not checked yet: the #72 reports against this build (the heart block in
+  trd_06/trd_09 is off camera from the debug entries; which map the tree fight
+  is in isn't known), hardware, the Old 3DS.

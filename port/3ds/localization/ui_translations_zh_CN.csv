@@ -386,3 +386,7 @@ New game,bottom_screen.c,Level 99,99级,"Star Haven 1.3.10+ string, drafted by t
 New game,bottom_screen.c,Lv 99,Lv 99,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
 Settings,bottom_screen.c,Game text,游戏文本,"Star Haven 1.3.11 string (language packs, GitHub #84), drafted by the maintainer: please review"
 Settings,bottom_screen.c,Not found,未找到,"Star Haven 1.3.11 string (language packs, GitHub #84), drafted by the maintainer: please review"
+ROM error,pm3ds_rom.c,This is the iQue ROM,这是 iQue 版的 ROM,"Star Haven 1.3.12 string (the other version's ROM), drafted by the maintainer: please review"
+ROM error,pm3ds_rom.c,it needs Star Haven iQue,需要使用 Star Haven iQue,"Star Haven 1.3.12 string (the other version's ROM), drafted by the maintainer: please review"
+ROM error,pm3ds_rom.c,This is not the iQue ROM,这不是 iQue 版的 ROM,"Star Haven 1.3.12 string (the other version's ROM), drafted by the maintainer: please review"
+ROM error,pm3ds_rom.c,it needs Star Haven (USA/Europe),需要使用 Star Haven（美版/欧版）,"Star Haven 1.3.12 string (the other version's ROM), drafted by the maintainer: please review"

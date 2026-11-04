@@ -8,6 +8,15 @@ PaperMario3DS_us.3dsx
 PaperMario3DS_us.elf
 PaperMario3DS_us.smdh
 build_assets_us/
+# iQue and JP builds (make PM3DS_VERSION=ique / jp): they hold game data, never commit
+build_ique/
+build_jp/
+build_assets_ique/
+build_assets_jp/
+PaperMario3DS_ique.*
+PaperMario3DS_jp.*
+StarHaven_iQue.*
+StarHaven_JP.*
 # per-version generated headers (tools/gen_version_headers.sh)
 gen/
 *.map

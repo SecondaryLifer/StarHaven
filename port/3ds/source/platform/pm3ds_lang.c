@@ -181,6 +181,20 @@ int pm3ds_lang_from_system(void) {
     }
 }
 
+/* en's text in lang, UTF-8 (en itself if there is none), for text in the
+ * game's language rather than the chosen one (a tattle's stat line) */
+const char *pm3ds_lang_utf8(int lang, const char *en) {
+    if (!en) return "";
+    if (!s_hashed) build_hash();
+    if (lang == PM3DS_LANG_ZH) {
+        int i = lookup(s_zh_hash, en, true);
+        return i >= 0 ? s_zh[i].zh : en;
+    }
+    if (lang <= PM3DS_LANG_EN || lang >= PM3DS_LANG_COUNT) return en;
+    int i = lookup(s_hash, en, false);
+    return i >= 0 && s_table[i].text[lang] ? s_table[i].text[lang] : en;
+}
+
 const char *T(const char *en) {
     if (!en) return "";
     if (!s_conv) pm3ds_lang_set(pm3ds_cfg.language);

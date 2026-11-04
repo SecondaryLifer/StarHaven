@@ -6,7 +6,8 @@
 # SD card (/3ds/StarHaven/baserom.z64), see source/platform/pm3ds_rom.c.
 #
 # usage: package.sh <game.elf> <outdir> [3dsx] [cia]     (default: both)
-#   PM3DS_VERSION  pal (default), us or jp, as for make; universal for the ELF of
+#   PM3DS_VERSION  pal (default), us, jp or ique, as for make (ique: its own title ID
+#            and icon, cia/icon_ique.icn); universal for the ELF of
 #            tools/universal.py (both copies stripped, both tables in romfs)
 #   BASEROM  the developer's ROM, only to locate the data (ver/<version>/baserom.z64;
 #            universal reads ver/pal and ver/us)
@@ -22,7 +23,7 @@ ROOT=$(realpath "$PORT/../..")
 export PM3DS_VERSION=${PM3DS_VERSION:-pal}
 [ "$PM3DS_VERSION" = universal ] || BASEROM=${BASEROM:-$ROOT/ver/$PM3DS_VERSION/baserom.z64}
 MAKEROM=${MAKEROM:-$PORT/local/bin/makerom}
-ICON=${ICON:-$PORT/cia/icon.icn}
+if [ "$PM3DS_VERSION" = ique ]; then ICON=${ICON:-$PORT/cia/icon_ique.icn}; else ICON=${ICON:-$PORT/cia/icon.icn}; fi
 BANNER=${BANNER:-$PORT/cia/banner.bnr}
 case "$PM3DS_VERSION" in
     pal|universal) NAME=${NAME:-StarHaven} ;;
@@ -57,6 +58,13 @@ if [[ " $WANT " == *" cia "* ]]; then
     # makerom takes the romfs root from the rsf (RomFs: RootPath: romfs),
     # relative to the working directory
     cp "${RSF:-$PORT/cia/app.rsf}" "$OUT/app.rsf"
+    # iQue can't join the EU/US program (a third copy of the game doesn't fit in
+    # memory): its own title, installed beside the other one
+    if [ "$PM3DS_VERSION" = ique ]; then
+        sed -i -e 's/^\(  UniqueId *: *\)0x92B99/\10x92B9A/' \
+               -e 's/^\(  ProductCode *: *\)"CTR-H-STHV"/\1"CTR-H-STHQ"/' "$OUT/app.rsf"
+        grep -q '0x92B9A' "$OUT/app.rsf" || { echo "package.sh: iQue UniqueId not set in app.rsf"; exit 1; }
+    fi
     ver() { sed -n "s/^#define PM3DS_VERSION_$1 *\([0-9]*\).*/\1/p" "$PORT/include/pm3ds_brand.h"; }
     (cd "$OUT" && "$MAKEROM" -f cia -o "$NAME.cia" -elf "$NAME.elf" -rsf app.rsf \
         -icon "$ICON" -banner "$BANNER" -target t -exefslogo \

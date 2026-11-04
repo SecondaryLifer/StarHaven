@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Draw Star Haven's icon (48x48) and HOME-menu banner (256x128), synthesize
-the banner jingle, and build cia/icon.icn and cia/banner.bnr with bannertool.
+the banner jingle, and build cia/icon.icn, cia/icon_ique.icn and cia/banner.bnr with bannertool.
 
 Everything is original: a folded-paper star over a night sky, the title in
 Fira Sans Heavy (SIL Open Font License), and a few bell tones. No game art.
@@ -28,6 +28,8 @@ FONT = os.environ.get("BRAND_FONT", "/usr/share/fonts/TTF/FiraSans-Heavy.ttf")
 NAME = "Star Haven"
 LONG = "Star Haven: a Paper Mario port for New 3DS (bring your own ROM)"
 PUBLISHER = "Star Haven team"
+NAME_IQUE = "Star Haven iQue"
+LONG_IQUE = "Star Haven: a Paper Mario port for 3DS, iQue (Chinese) version (bring your own ROM)"
 
 SKY_TOP, SKY_BOTTOM = (18, 24, 72), (64, 40, 120)
 STAR_LIGHT, STAR_DARK, STAR_EDGE = (255, 226, 110), (246, 168, 44), (122, 62, 16)
@@ -188,6 +190,9 @@ def main():
     make_jingle(jingle)
     subprocess.run([BANNERTOOL, "makesmdh", "-s", NAME, "-l", LONG, "-p", PUBLISHER, "-i", icon,
                     "-o", os.path.join(OUT, "icon.icn")], check=True)
+    # the iQue build installs as its own title beside the EU/US one (tools/package.sh)
+    subprocess.run([BANNERTOOL, "makesmdh", "-s", NAME_IQUE, "-l", LONG_IQUE, "-p", PUBLISHER, "-i", icon,
+                    "-o", os.path.join(OUT, "icon_ique.icn")], check=True)
     cgfx = os.path.join(OUT, "banner.cgfx")
     if os.path.exists(cgfx):
         make_emblem(cgfx)

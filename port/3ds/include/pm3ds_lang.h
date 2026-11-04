@@ -35,6 +35,8 @@ int pm3ds_lang(void);                     /* the current language */
 void pm3ds_lang_set(int lang);
 int pm3ds_lang_from_system(void);         /* the console's language, if one of ours (else English) */
 const char *T(const char *en);
+/* en in one language, UTF-8, whichever is chosen (en if untranslated) */
+const char *pm3ds_lang_utf8(int lang, const char *en);
 
 /* UTF-8 -> the UI encoding; returns the length written */
 size_t pm3ds_lang_encode(const char *utf8, char *out, size_t size);

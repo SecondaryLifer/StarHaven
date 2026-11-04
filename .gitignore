@@ -27,6 +27,7 @@ build.ninja
 # port/3ds/tools/gen_link_syms.py <link log> when new _ROM_START refs appear
 !port/3ds/m11_syms.ld
 !port/3ds/m11_syms_us.ld
+!port/3ds/m11_syms_ique.ld
 !src/map_shape.ld
 *.elf
 *.z64
@@ -37,6 +38,7 @@ build.ninja
 *.i
 *.o
 *.zip
+*.z01
 baserom.*
 build/
 !tools/build

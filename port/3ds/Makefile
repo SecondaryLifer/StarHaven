@@ -77,6 +77,10 @@ BUILD		:=	build$(PM3DS_VSUFFIX)
 # the name players see (include/pm3ds_brand.h, cia/app.rsf, tools/make_branding.py)
 APP_TITLE	:=	Star Haven
 APP_DESCRIPTION	:=	Paper Mario port for New 3DS (bring your own ROM)
+ifeq ($(PM3DS_VERSION),ique)
+APP_TITLE	:=	Star Haven iQue
+APP_DESCRIPTION	:=	Paper Mario port, iQue (Chinese) version (bring your own ROM)
+endif
 APP_AUTHOR	:=	Star Haven team
 ICON		:=	cia/icon.png
 
