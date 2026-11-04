@@ -19,6 +19,7 @@
 #include <string.h>
 
 #include "pm3ds_cheats.h"
+#include "pm3ds_hud_info.h"
 
 #define CHEAT_MAGIC 0x53484348   /* "SHCH" */
 #define CHEAT_BLOCK_OFS 0x10     /* after rando.c's block */
@@ -44,6 +45,19 @@ static bool sHard, sNextHard;
 
 void pm3ds_hard_choose(bool on) {
     sNextHard = on;
+}
+
+/* Level 99 (GitHub #83), the same kind of choice: levels up to 99 and stats up to 95 HP, 95 FP,
+ * 99 BP, the cheats' rules as a way to play, TTYD style. The save's tail is full, so it is a
+ * second bit in the hard block's word: bit 0 hard, bit 1 this. */
+static bool sLevel99, sNextLevel99;
+
+void pm3ds_level99_choose(bool on) {
+    sNextLevel99 = on;
+}
+
+bool pm3ds_level99(void) {
+    return sLevel99;
 }
 
 /* Skip intro (Discord suggestion), also from the new-game picker: the new file starts
@@ -100,6 +114,7 @@ void pm3ds_cheats_off(void) {
     sAllowed = false;
     sOn = 0;
     sHard = false;
+    sLevel99 = false;
 }
 
 /* src/filemenu/filemenu_yesno.c, new file: the picker's choice */
@@ -118,6 +133,13 @@ void pm3ds_cheats_new_game(void) {
 #endif
     sHard = sNextHard;
     sNextHard = false;
+    sLevel99 = sNextLevel99;
+    sNextLevel99 = false;
+#ifdef PM3DS_TEST_L99
+    sLevel99 = true;
+    gPlayerData.level = PM3DS_TEST_L99;
+    gPlayerData.starPoints = 99;
+#endif
     if (sHard) {
         // the tutorial fights can't be won at 1.5x damage without them (GitHub #74): action
         // commands and guarding from the start, as the Lucky Star gives them later
@@ -128,7 +150,7 @@ void pm3ds_cheats_new_game(void) {
 /* src/fio.c */
 void pm3ds_cheats_serialize(void* tail) {
     CheatSaveBlock b = { CHEAT_MAGIC, 1, sAllowed, (s32)sOn };
-    s32 hard[2] = { HARD_MAGIC, sHard };
+    s32 hard[2] = { HARD_MAGIC, (sHard ? 1 : 0) | (sLevel99 ? 2 : 0) };
     memcpy((u8*)tail + CHEAT_BLOCK_OFS, &b, sizeof(b));
     memcpy((u8*)tail + HARD_BLOCK_OFS, hard, sizeof(hard));
 }
@@ -139,7 +161,8 @@ void pm3ds_cheats_deserialize(const void* tail) {
     s32 hard[2];
     memcpy(hard, (const u8*)tail + HARD_BLOCK_OFS, sizeof(hard));
     pm3ds_cheats_off();
-    sHard = hard[0] == HARD_MAGIC && hard[1] != 0;
+    sHard = hard[0] == HARD_MAGIC && (hard[1] & 1);
+    sLevel99 = hard[0] == HARD_MAGIC && (hard[1] & 2);
     if (b.magic == CHEAT_MAGIC && b.version == 1 && b.allowed) {
         sAllowed = true;
         sOn = (u32)b.on & ((1u << PM3DS_CHEAT_COUNT) - 1);
@@ -149,7 +172,7 @@ void pm3ds_cheats_deserialize(const void* tail) {
 /* GitHub #76: the level-up limits. Two digits are all the level-up screen and the status bar
  * have, so "no limit" stops at 95 HP and FP, 99 BP, and 99 with badges on. */
 bool pm3ds_no_stat_caps(void) {
-    return pm3ds_cheat_on(PM3DS_CHEAT_NOCAP);
+    return sLevel99 || pm3ds_cheat_on(PM3DS_CHEAT_NOCAP);
 }
 s32 pm3ds_cap_hpfp(void) {
     return pm3ds_no_stat_caps() ? 95 : 50;
@@ -168,7 +191,7 @@ static const s16 sGiveItems[] = {
 };
 static volatile s32 sGivePending = -1;
 static s32 sGiveItemIdx, sGiveBadge = ITEM_FIRST_BADGE;
-static char sGiveItemName[32], sGiveBadgeName[32];
+static char sGiveItemName[PM3DS_UI_NAME + 8], sGiveBadgeName[PM3DS_UI_NAME + 8];
 
 void pm3ds_cheat_give(int what) {
     if (sAllowed) {
@@ -270,7 +293,7 @@ static void qol_badges_step(void) {
 
 /* src/battle/level_up.c, src/battle/1A5830.c: 2 digits is what the screens have */
 int pm3ds_max_level(void) {
-    return pm3ds_cheat_on(PM3DS_CHEAT_LEVELS) ? 99 : 27;
+    return sLevel99 || pm3ds_cheat_on(PM3DS_CHEAT_LEVELS) ? 99 : 27;
 }
 
 /* src/main_loop.c, every game step */

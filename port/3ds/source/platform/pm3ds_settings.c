@@ -10,6 +10,7 @@
 #include "pm3ds_brand.h"
 #include "pm3ds_rando.h"
 #include "pm3ds_settings.h"
+#include "pm3ds_langpack.h"
 #include "pm3ds_lang.h"
 
 #define CFG_PATH PM3DS_SD_DIR "/port.cfg"
@@ -93,6 +94,7 @@ void pm3ds_settings_load(void) {
     pm3ds_cfg.steer_jump = false;
     pm3ds_cfg.dpad_menus = true;
     pm3ds_cfg.language = -1;
+    pm3ds_cfg.lang_pack[0] = '\0';
     pm3ds_settings_default_keymap(pm3ds_cfg.keymap);
     FILE *f = fopen(CFG_PATH, "r");
     if (f) {
@@ -120,6 +122,10 @@ void pm3ds_settings_load(void) {
             else if (sscanf(line, "dpad_menus=%d", &v) == 1) pm3ds_cfg.dpad_menus = v != 0;
             else if (sscanf(line, "autosave=%d", &v) == 1 && v >= 0 && v < PM3DS_AUTOSAVE_COUNT) pm3ds_cfg.autosave = (uint8_t)v;
             else if (sscanf(line, "color_mode=%d", &v) == 1 && v >= 0 && v < PM3DS_COLOR_COUNT) pm3ds_cfg.color_mode = (uint8_t)v;
+            else if (!strncmp(line, "lang_pack=", 10)) {
+                snprintf(pm3ds_cfg.lang_pack, sizeof pm3ds_cfg.lang_pack, "%s", line + 10);
+                pm3ds_cfg.lang_pack[strcspn(pm3ds_cfg.lang_pack, "\r\n ")] = '\0';
+            }
             else if (sscanf(line, "language=%d", &v) == 1 && v >= 0 && v < PM3DS_LANG_COUNT) pm3ds_cfg.language = v;
             else if (sscanf(line, "update_skip=%d", &v) == 1) pm3ds_cfg.update_skip = v;
             else if (sscanf(line, "rando_flags=%d", &v) == 1) pm3ds_cfg.rando_flags = (unsigned)v & PM3DS_RANDO_ALL;
@@ -137,6 +143,8 @@ void pm3ds_settings_load(void) {
     }
     if (pm3ds_cfg.language < 0) pm3ds_cfg.language = pm3ds_lang_from_system();
     pm3ds_lang_set(pm3ds_cfg.language);
+    pm3ds_langpack_scan();
+    pm3ds_langpack_request(pm3ds_cfg.lang_pack);
     apply();
 }
 
@@ -158,6 +166,7 @@ void pm3ds_settings_save(void) {
     fprintf(f, "steer_spin=%d\n", pm3ds_cfg.steer_spin);
     fprintf(f, "steer_jump=%d\n", pm3ds_cfg.steer_jump);
     fprintf(f, "dpad_menus=%d\n", pm3ds_cfg.dpad_menus);
+    fprintf(f, "lang_pack=%s\n", pm3ds_cfg.lang_pack);
     fprintf(f, "color_mode=%d\n", pm3ds_cfg.color_mode);
     fprintf(f, "autosave=%d\n", pm3ds_cfg.autosave);
     fprintf(f, "language=%d\n", pm3ds_cfg.language);

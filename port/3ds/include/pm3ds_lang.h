@@ -4,8 +4,9 @@
  * The game's text stays the ROM's. T("English text") gives the text in the
  * chosen language, in the bottom screen's encoding: one byte per glyph of the
  * game's font (0x21-0x7E ASCII, 0x80-0xAF its accented letters, as message
- * code + 0x20), and PM3DS_TXT_ESC + 3 bytes for any other character (drawn with
- * the 3DS system font: Japanese). Missing translations fall back to English.
+ * code + 0x20), and PM3DS_TXT_ESC + 3 bytes for any other character (Chinese:
+ * the iQue ROM's font or the one built in, pm3ds_cjk_font.inc; Japanese: the 3DS
+ * system font). Missing translations fall back to English.
  */
 #ifndef PM3DS_LANG_H
 #define PM3DS_LANG_H
@@ -20,6 +21,7 @@ enum {
     PM3DS_LANG_ES,
     PM3DS_LANG_IT,
     PM3DS_LANG_JA,
+    PM3DS_LANG_ZH,      /* Simplified Chinese (localization/ui_translations_zh_CN.csv) */
     PM3DS_LANG_COUNT
 };
 

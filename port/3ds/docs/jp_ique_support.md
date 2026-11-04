@@ -75,11 +75,36 @@ Needs the iQue ROM as `ver/ique/baserom.z64` (SHA1
 - `filemenu_msg.c`: the iQue glyph path wrote past `filemenu_glyphBuffer`;
   taken from PR #62.
 - Values and fixes first worked out by Darth-Koopa in PR #62 (iQue Version
-  Support), which also has more to port once there is a ROM to test with:
-  icon reads through `PM3DS_ICON_ROM_ADDR`, `load_font_data` copying the
-  linked font directly, the Peach letter in osr_00, and a Chinese translation
-  of the bottom screen (their fork's `port/3ds/localization/`).
-- The bottom screen's text: iQue messages use 2-byte characters (one font,
-  0x9E0 glyphs), so the same decoder/atlas work as for JP applies, with a
-  bigger atlas (~2500 glyphs at 16 px do not fit one 1024x1024 texture: load
-  the glyphs a screen needs on demand).
+  Support) and their StarHaven_CN fork.
+- Ported without a ROM (2026-11-04):
+  - The bottom screen in Chinese (`localization/`): Settings > Language >
+    简体中文, the default on iQue. The strings are their CSV; the characters
+    are built in (Fusion Pixel), so this also works with the US and EU ROMs.
+  - The game's names on the bottom screen: `touch_menu.c decode_msg_as` turns
+    the 2-byte characters into code points (`ique_charmap.inc`, from
+    `CHARSET_IQUE`), and `bottom_screen.c` draws them with the ROM's
+    `charset/standard.dat`, decoding each character into a 256-slot cache when
+    first seen. Lines break between Chinese characters (`wrap_text`).
+  - Name buffers (`PM3DS_UI_NAME`, `PM3DS_TM_NAME`) are larger on iQue: a
+    character takes 4 bytes in the UI encoding.
+  - `gfx_translate.c`: palette loads may start on a halfword or in the cart.
+  - `obfuscation_shims.c` is left out (iQue's splat has no obfuscated segments).
+  - `gen_version_headers.sh` copies the version's `icon_offsets.h` when it
+    isn't PAL's.
+- Not needed here: their icon-address and `load_font_data` changes (this
+  tree's `ld_addrs.h` already defines `icon_ROM_START` as the cart address, and
+  `dma_copy` copies host pointers and invalidates the texture cache).
+- Left for when the ROM is here, in this order:
+  1. `tools/extract_assets.py`, `tools/gen_version_headers.sh ique`,
+     `PM3DS_VERSION=ique tools/gen_include_assets.py`, a first link and
+     `tools/gen_link_syms.py` for `m11_syms_ique.ld` (their fork has one to
+     compare with).
+  2. `make PM3DS_VERSION=ique`, then boot: logos, title, file select (the
+     file menu's Chinese glyphs), a new game, a battle.
+  3. The bottom screen with the ROM's font: item and enemy names, a tattle
+     (its stat line looks for "Max HP:", which the Chinese text may not have).
+  4. Their GitHub #72 reports, against the port rather than their fork: the
+     ground's texture, the enemy that stays in the tree after the wrong-tree
+     fight, the heart block.
+  5. Packaging: its own `StarHaven_iQue.cia`, or a third copy in the
+     universal one if it fits.

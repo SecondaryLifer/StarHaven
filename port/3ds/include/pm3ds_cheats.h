@@ -29,7 +29,7 @@ void pm3ds_cheat_give(int what);
 const char *pm3ds_cheat_give_item(void);    /* the items' and the badges' current choice */
 const char *pm3ds_cheat_give_badge(void);
 
-int pm3ds_max_level(void);                /* 27, or 99 with PM3DS_CHEAT_LEVELS */
+int pm3ds_max_level(void);                /* 27, or 99 with PM3DS_CHEAT_LEVELS or Level 99 */
 void pm3ds_cheats_choose(bool allowed);   /* the next new game's choice */
 bool pm3ds_cheats_allowed(void);          /* the running game's save allows cheats */
 bool pm3ds_cheat_on(int cheat);
@@ -39,6 +39,10 @@ void pm3ds_cheat_toggle(int cheat);
 void pm3ds_hard_choose(bool on);
 bool pm3ds_hard_mode(void);
 int32_t pm3ds_hard_scale(int32_t v);   /* x1.5 rounded up in hard mode */
+
+/* Level 99 (n64_shim/cheats.c, GitHub #83): per save, chosen on the new-game picker */
+void pm3ds_level99_choose(bool on);
+bool pm3ds_level99(void);
 
 void pm3ds_skip_intro_choose(bool on);   /* the new file starts after the prologue's fall */
 

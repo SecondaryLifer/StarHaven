@@ -297,6 +297,11 @@ CFILES		:=	$(filter-out %.inc.c,$(foreach dir,$(SOURCES),$(notdir $(wildcard $(d
 # libultra internals we don't ship on 3DS. The port-side n64_shim layer
 # replaces these.
 M4_EXCLUDE := crash_screen.c create_audio_system_obfuscated.c is_debug.c load_engine_data_obfuscated.c
+# iQue's splat has no *_obfuscated segments, so the wrappers for them can't compile
+# (their callers are native here: see SHIFT above). From Darth-Koopa's iQue fork.
+ifeq ($(PM3DS_VERSION),ique)
+M4_EXCLUDE += obfuscation_shims.c
+endif
 # files only the PAL ROM has (ver/pal/splat.yaml but not ver/us): languages,
 # the title-screen language menu, PAL heap layout
 PAL_ONLY_CFILES := filemenu_selectlanguage.c heaps4.c titlemenu.c \

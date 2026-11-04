@@ -324,6 +324,14 @@ void filemenu_update(void) {
         filemenu_pressedButtons = 0;
     }
 
+#ifdef _3DS
+    {
+        // the file menu by touch (port n64_shim/filemenu_touch.c)
+        extern void pm3ds_fm_apply(bool inputAllowed);
+        pm3ds_fm_apply(i >= ARRAY_COUNT(gWindows));
+    }
+#endif
+
     if (filemenu_pressedButtons & BUTTON_B) {
         filemenu_pressedButtons &= ~BUTTON_A;
     }
@@ -1132,10 +1140,20 @@ void filemenu_init(s32 mode) {
     }
     update_window_hierarchy(WIN_PAUSE_DECRIPTION, 64);
 #endif
+#ifdef _3DS
+    {
+        extern bool pm3dsFileMenuUp;
+        pm3dsFileMenuUp = true;   // the touch page (port n64_shim/filemenu_touch.c)
+    }
+#endif
 }
 
 // TODO bad match, look into
 void filemenu_cleanup(void) {
+#ifdef _3DS
+    extern bool pm3dsFileMenuUp;
+    pm3dsFileMenuUp = false;   // the touch page (port n64_shim/filemenu_touch.c)
+#endif
     MenuPanel** panelIt;
     s32 i;
 

@@ -32,10 +32,12 @@
 #include <stdlib.h>
 #include "pm3ds_brand.h"
 
+#include "pm3ds_fm_touch.h"
 #include "pm3ds_cheats.h"
 #include "pm3ds_hud_info.h"
 #include "pm3ds_rando.h"
 #include "pm3ds_settings.h"
+#include "pm3ds_langpack.h"
 #include "pm3ds_lang.h"
 #include "pm3ds_log.h"
 #include "pm3ds_touch_menu.h"
@@ -312,8 +314,14 @@ static void build_small_font(void) {
 }
 
 /* ---- primitives ---------------------------------------------------------- */
+#if VERSION_IQUE
+static void iq_upload(void);
+#endif
 static void flush(void) {
     if (s_vcount > s_batch_start) {
+#if VERSION_IQUE
+        iq_upload();
+#endif
         C3D_DrawArrays(GPU_TRIANGLES, s_batch_start, s_vcount - s_batch_start);
     }
     s_batch_start = s_vcount;
@@ -355,7 +363,126 @@ static bool sys_font_load(void) {
     return n > 0;
 }
 
+/* ---- Chinese: the built-in font (pm3ds_cjk_font.inc), and on iQue the ROM's own ---- */
+#include "pm3ds_cjk_font.inc"
+#define CJK_COLS 32
+static C3D_Tex s_cjk;           /* alpha only: both sizes, 16x16 cells, 10 px first */
+static int s_cjk_state;         /* 0 not built, 1 ok, -1 failed */
+
+static bool cjk_build(void) {
+    if (s_cjk_state) return s_cjk_state > 0;
+    s_cjk_state = -1;
+    int cells = PM3DS_CJK_CHARS * 2, h = 16;
+    while (h < (cells + CJK_COLS - 1) / CJK_COLS * 16) h *= 2;
+    if (h > 1024) return false;
+    const int w = CJK_COLS * 16;
+    u8 *a = (u8 *)calloc((size_t)w * h, 1);
+    if (!a) return false;
+    for (int c = 0; c < cells; c++) {
+        const uint16_t *rows = c < PM3DS_CJK_CHARS ? pm3ds_cjk10_bits[c] : pm3ds_cjk12_bits[c - PM3DS_CJK_CHARS];
+        int ox = (c % CJK_COLS) * 16, oy = (c / CJK_COLS) * 16;
+        for (int y = 0; y < 16; y++)
+            for (int x = 0; x < 16; x++)
+                if (rows[y] & (0x8000 >> x)) a[(size_t)(oy + y) * w + ox + x] = 255;
+    }
+    u8 *tiled = (u8 *)malloc((size_t)w * h);
+    if (tiled && C3D_TexInit(&s_cjk, w, h, GPU_A8)) {
+        for (int gy = 0; gy < h; gy++)
+            for (int x = 0; x < w; x++) tiled[tiled_index(x, gy, w)] = a[(size_t)(h - 1 - gy) * w + x];
+        C3D_TexUpload(&s_cjk, tiled);
+        svcFlushProcessDataCache(CUR_PROCESS_HANDLE, (u32)s_cjk.data, s_cjk.size);
+        C3D_TexSetFilter(&s_cjk, GPU_NEAREST, GPU_NEAREST);   /* pixel font: drawn 1:1 where it can */
+        C3D_TexSetWrap(&s_cjk, GPU_CLAMP_TO_EDGE, GPU_CLAMP_TO_EDGE);
+        s_cjk_state = 1;
+    }
+    free(tiled);
+    free(a);
+    return s_cjk_state > 0;
+}
+
+static int cjk_index(uint32_t cp) {
+    int lo = 0, hi = PM3DS_CJK_CHARS - 1;
+    while (lo <= hi) {
+        int mid = (lo + hi) / 2;
+        if (pm3ds_cjk_cp[mid] == cp) return mid;
+        if (pm3ds_cjk_cp[mid] < cp) lo = mid + 1; else hi = mid - 1;
+    }
+    return -1;
+}
+
+#if VERSION_IQUE
+/* The iQue ROM's 16x16 font has every character its messages use (item and
+ * enemy names, tattles): those come here as code points (n64_shim/touch_menu.c)
+ * and are drawn with it, a character decoded into a cache slot when first seen. */
+#include "../n64_shim/ique_charmap.inc"
+extern unsigned char charset_standard_OFFSET[];   /* src/charset/charset.c: the whole font */
+#define IQ_COLS 16
+#define IQ_SLOTS (IQ_COLS * 16)
+static C3D_Tex s_iq;            /* RGBA, the white palette, 256 slots */
+static u8 *s_iq_canvas;
+static bool s_iq_ok, s_iq_dirty;
+static int16_t s_iq_glyph[IQ_SLOTS];      /* the glyph in each slot, -1 none */
+static uint32_t s_iq_used[IQ_SLOTS];      /* the frame it was last drawn in */
+static int s_iq_next;
+static uint32_t s_ui_frame;
+
+static int iq_glyph_of(uint32_t cp) {
+    int lo = 0, hi = PM3DS_IQUE_CHARS - 1;
+    while (lo <= hi) {
+        int mid = (lo + hi) / 2;
+        uint32_t k = pm3ds_ique_cp_glyph[mid] >> 12;
+        if (k == cp) return (int)(pm3ds_ique_cp_glyph[mid] & 0xFFF);
+        if (k < cp) lo = mid + 1; else hi = mid - 1;
+    }
+    return -1;
+}
+
+static void decode_image(const pm3ds_ui_image_t *im, u8 *canvas, int cw, int ox, int oy);
+static void upload_rgba8(C3D_Tex *tex, const u8 *rgba, int w, int h);
+
+/* the slot holding glyph, decoding it if needed; -1 if the font isn't loaded or
+ * every slot is in use this frame (the GPU draws the frame later: a slot drawn
+ * in it can't be overwritten) */
+static int iq_slot(int glyph) {
+    pm3ds_ui_font_t f;
+    if (!pm3ds_ui_get_font(&f)) return -1;
+    if (!s_iq_ok) {
+        s_iq_canvas = (u8 *)calloc(IQ_COLS * 16 * IQ_COLS * 16, 4);
+        if (!s_iq_canvas || !C3D_TexInit(&s_iq, IQ_COLS * 16, IQ_COLS * 16, GPU_RGBA8)) return -1;
+        C3D_TexSetFilter(&s_iq, GPU_LINEAR, GPU_LINEAR);
+        C3D_TexSetWrap(&s_iq, GPU_CLAMP_TO_EDGE, GPU_CLAMP_TO_EDGE);
+        memset(s_iq_glyph, 0xFF, sizeof s_iq_glyph);
+        memset(s_iq_used, 0xFF, sizeof s_iq_used);
+        s_iq_ok = true;
+    }
+    for (int i = 0; i < IQ_SLOTS; i++)
+        if (s_iq_glyph[i] == glyph) { s_iq_used[i] = s_ui_frame; return i; }
+    for (int tries = 0; tries < IQ_SLOTS; tries++) {
+        int i = s_iq_next;
+        s_iq_next = (s_iq_next + 1) % IQ_SLOTS;
+        if (s_iq_glyph[i] >= 0 && s_iq_used[i] == s_ui_frame) continue;
+        pm3ds_ui_image_t im = { charset_standard_OFFSET + (size_t)glyph * 128, f.palettes, 16, 16, UI_FMT_CI4 };
+        decode_image(&im, s_iq_canvas, IQ_COLS * 16, (i % IQ_COLS) * 16, (i / IQ_COLS) * 16);  /* MSG_PAL_WHITE */
+        s_iq_glyph[i] = (int16_t)glyph;
+        s_iq_used[i] = s_ui_frame;
+        s_iq_dirty = true;
+        return i;
+    }
+    return -1;
+}
+
+/* before a draw (flush): slots filled since the last upload were not drawn
+ * from in this frame, so the draws queued before keep their glyphs */
+static void iq_upload(void) {
+    if (s_iq_ok && s_iq_dirty) {
+        upload_rgba8(&s_iq, s_iq_canvas, IQ_COLS * 16, IQ_COLS * 16);
+        s_iq_dirty = false;
+    }
+}
+#endif
+
 static bool is_sys_sheet(const C3D_Tex *t) {
+    if (t == &s_cjk) return true;   /* alpha only, like the system font's sheets */
     return s_sys_sheets > 0 && t >= s_sys_sheet && t < s_sys_sheet + s_sys_sheets;
 }
 
@@ -364,6 +491,38 @@ static bool is_sys_sheet(const C3D_Tex *t) {
 static void quad2(C3D_Tex *t, float x0, float y0, float x1, float y1,
                   float u0, float v0, float u1, float v1, u32 ct, u32 cb);
 static float sys_glyph(float x, float y, uint32_t cp, float scale, u32 c, bool draw) {
+#if VERSION_IQUE
+    /* text sizes: the ROM's font, like the game's own text (the built-in pixel
+     * font stays for the small sizes, where it is sharper) */
+    int iq = scale >= 0.78f || cjk_index(cp) < 0 ? iq_glyph_of(cp) : -1;
+    if (iq >= 0) {
+        if (draw) {
+            int slot = iq_slot(iq);
+            if (slot >= 0) {
+                float gx = (slot % IQ_COLS) * 16.0f, gy = (slot / IQ_COLS) * 16.0f, n = IQ_COLS * 16.0f;
+                quad2(&s_iq, x, y + 0.5f * scale, x + 16 * scale, y + 15.5f * scale,
+                      gx / n, (gy + 0.5f) / n, (gx + 16) / n, (gy + 15.5f) / n, c, c);
+            }
+        }
+        return 16 * scale;
+    }
+#endif
+    int ci = cjk_index(cp);
+    if (ci >= 0 && cjk_build()) {
+        /* 10 px under 0.9 (small text, list rows), else 12 px; 1:1 near the size
+         * each matches beside the game's font, scaled otherwise */
+        bool small = scale < 0.9f;
+        float k = small ? (scale >= 0.55f ? 1.0f : scale / 0.55f) : (scale <= 1.15f ? 1.0f : scale);
+        int cell = small ? ci : PM3DS_CJK_CHARS + ci, asc = small ? PM3DS_CJK10_ASCENT : PM3DS_CJK12_ASCENT;
+        float adv = (small ? pm3ds_cjk10_adv[ci] : pm3ds_cjk12_adv[ci]) * k;
+        if (draw) {
+            float gx = (cell % CJK_COLS) * 16.0f, gy = (cell / CJK_COLS) * 16.0f;
+            float tw = (float)s_cjk.width, th = (float)s_cjk.height;
+            float x0 = (float)(int)(x + 0.5f), y0 = (float)(int)(y + 13.0f * scale - asc * k + 0.5f);   /* baselines level */
+            quad2(&s_cjk, x0, y0, x0 + 16 * k, y0 + 16 * k, gx / tw, gy / th, (gx + 16) / tw, (gy + 16) / th, c, c);
+        }
+        return adv;
+    }
     if (!sys_font_load()) return 8 * scale;
     TGLP_s *g = fontGetGlyphInfo(s_sys_font);
     float k = 14.0f * scale / (float)g->cellHeight;
@@ -586,6 +745,7 @@ static bool draw_ui_icon(int id, float x, float y, float size, u32 c);
 static bool draw_icon(const void *script, float x, float y, float size, u32 c);
 static bool in(int px, int py, float x0, float y0, float x1, float y1);
 static void small_text_center(float cx, float y, const char *str, float scale, u32 c);
+static void small_text_center_in(float cx, float y, const char *str, float scale, float max_w, u32 c);
 
 /* shortcut for the game (src/world/menus.c): 1 = item menu, 2 = quick save, 3 = pause menu on the
  * Badges page, 0x100 + id = switch partner */
@@ -872,7 +1032,14 @@ static void draw_stats(void) {
     float tw = text_width(buf, 0.8f);
     image(UI_IMG_TIME, CX1 - tw - 18, SUB_Y - 1, 1.0f, COL_WHITE);
     text(CX1 - tw, SUB_Y, buf, 0.8f, 0, COL_WHITE);
-    if (pm3ds_hard_mode()) text_right(CX1 - tw - 22, SUB_Y + 2, "Hard", 0.7f, COL_HP);   /* GitHub #69 */
+    {   /* the save's way to play: GitHub #69, #83 */
+        float tx = CX1 - tw - 22;
+        if (pm3ds_hard_mode()) {
+            text_right(tx, SUB_Y + 2, "Hard", 0.7f, COL_HP);
+            tx -= text_width(T("Hard"), 0.7f) + 5;
+        }
+        if (pm3ds_level99()) text_right(tx, SUB_Y + 2, "Lv 99", 0.7f, COL_GOLD);
+    }
     draw_qs_button();
 
     /* HP and FP */
@@ -1050,12 +1217,23 @@ static int wrap_text(const char *str, float scale, float width, short *start, sh
     while (i < end_all && n < max) {
         while (str[i] == ' ') i++;
         if (!str[i]) break;
-        int j = i, last_space = -1;
+        int j = i, last_space = -1, cl;
         float w = 0;
-        for (; j < end_all; j++) {
-            int g = glyph_of(str[j]);
-            float cw = (g >= 0 && g < s_glyphs ? s_glyph_w[g] : 5) * scale;
-            if (str[j] == ' ') last_space = j;
+        for (; j < end_all; j += cl) {
+            uint32_t cp = pm3ds_txt_next(str + j, &cl);
+            float cw;
+            if (cp & 0x80000000u) {
+                /* Chinese and Japanese: a line may break before any character
+                 * but closing punctuation */
+                cp &= 0x1FFFFF;
+                cw = sys_glyph(0, 0, cp, scale, 0, false);
+                if (!(cp == 0x3001 || cp == 0x3002 || (cp >= 0xFF01 && cp <= 0xFF1F && cp != 0xFF08) ||
+                      cp == 0x2026 || cp == 0x300D || cp == 0x300F)) last_space = j;
+            } else {
+                int g = glyph_of((char)cp);
+                cw = (g >= 0 && g < s_glyphs ? s_glyph_w[g] : 5) * scale;
+                if (cp == ' ') last_space = j;
+            }
             if (w + cw > width && j > i) break;
             w += cw;
         }
@@ -2090,13 +2268,13 @@ static const char *const s_text_names[TEXT_SPEEDS] = { "Normal", "Fast", "Instan
 /* The Settings page: a list in sections, dragged up and down (a scroll bar
  * shows where); a row changes its setting when tapped without dragging. */
 enum { OPT_LANG, OPT_SCREEN, OPT_FPS, OPT_3D, OPT_COLORS, OPT_TEXT, OPT_FF_SPEED, OPT_FF_BUTTON, OPT_DROPS, OPT_BEEP, OPT_DPAD,
-       OPT_AUTOSAVE, OPT_UPDATE, OPT_HUD, OPT_ICE, OPT_MUSIC, OPT_SFX, OPT_JUKEBOX, OPT_STEER_SPIN, OPT_STEER_JUMP, OPT_COUNT };
+       OPT_AUTOSAVE, OPT_UPDATE, OPT_HUD, OPT_ICE, OPT_MUSIC, OPT_SFX, OPT_JUKEBOX, OPT_STEER_SPIN, OPT_STEER_JUMP, OPT_UPDATE_NOW, OPT_PACK, OPT_COUNT };
 #define OPT_HEADER 0x100          /* + section number */
 static const int s_opt_list[] = {
-    OPT_HEADER + 0, OPT_LANG, OPT_SCREEN, OPT_FPS, OPT_3D, OPT_COLORS, OPT_HUD, OPT_ICE,
+    OPT_HEADER + 0, OPT_LANG, OPT_PACK, OPT_SCREEN, OPT_FPS, OPT_3D, OPT_COLORS, OPT_HUD, OPT_ICE,
     OPT_HEADER + 1, OPT_TEXT, OPT_FF_SPEED, OPT_FF_BUTTON, OPT_AUTOSAVE, OPT_DROPS, OPT_BEEP, OPT_DPAD, OPT_STEER_SPIN, OPT_STEER_JUMP,
     OPT_HEADER + 2, OPT_MUSIC, OPT_SFX, OPT_JUKEBOX,
-    OPT_HEADER + 3, OPT_UPDATE,
+    OPT_HEADER + 3, OPT_UPDATE_NOW, OPT_UPDATE,
 };
 static const char *const s_opt_sections[] = { "Display", "Gameplay", "Sound", "System" };
 #define OPT_LIST_N (int)(sizeof s_opt_list / sizeof s_opt_list[0])
@@ -2122,6 +2300,12 @@ static void opt_value(int id, char *buf, size_t size) {
     const char *v = "";
     switch (id) {
         case OPT_LANG:      v = pm3ds_lang_name(pm3ds_cfg.language); break;
+        case OPT_PACK: {    /* GitHub #84: a language pack's name (already UI-encoded, not translated) */
+            const char *name = pm3ds_langpack_current_name();
+            if (name != NULL) { snprintf(buf, size, "%s", name); return; }
+            v = pm3ds_cfg.lang_pack[0] ? "Not found" : "Original";
+            break;
+        }
         case OPT_SCREEN:    v = s_view_names[pm3ds_cfg.view_mode % 4]; break;
         case OPT_FPS:       v = s_fps_names[pm3ds_cfg.fps60]; break;
         case OPT_3D:        v = pm3ds_lite_effects ? "Off (Old 3DS)" : pm3ds_depth3d_names[pm3ds_cfg.depth3d % DEPTH3D_LEVELS]; break;
@@ -2149,14 +2333,29 @@ static void opt_value(int id, char *buf, size_t size) {
             break;
         }
         case OPT_UPDATE:    v = pm3ds_cfg.update_check ? "On" : "Off"; break;
+        case OPT_UPDATE_NOW:
+            switch (pm3ds_update_state()) {
+                case PM3DS_UPD_RUNNING: v = "Checking..."; break;
+                case PM3DS_UPD_CURRENT: v = "Up to date"; break;
+                case PM3DS_UPD_NO_WIFI: v = "No Wi-Fi"; break;
+                case PM3DS_UPD_FAILED:  v = "No answer"; break;
+                case PM3DS_UPD_NEWER: {
+                    int f = pm3ds_update_found();
+                    snprintf(buf, size, "v%d.%d.%d", f / 10000, f / 100 % 100, f % 100);
+                    return;
+                }
+                default: v = "Check"; break;
+            }
+            break;
     }
     snprintf(buf, size, "%s", T(v));
 }
 
 static const char *const s_opt_labels[OPT_COUNT] = {
     "Language", "Screen", "Frame rate", "3D depth", "Colors", "Text speed", "Fast-forward speed", "Fast-forward button",
-    "Heart & flower drops", "Low HP beep", "D-pad in menus", "Autosave", "Update check",
+    "Heart & flower drops", "Low HP beep", "D-pad in menus", "Autosave", "Check at launch",
     "Battle HP/FP bar", "Ice Power effect", "Music", "Sound effects", "Jukebox", "Steerable spin", "Steerable jump",
+    "Check for updates", "Game text",
 };
 
 /* Quit game (in game, GitHub #67): back to the title, saving first or not.
@@ -2321,6 +2520,14 @@ static void options_tap(int px, int py) {
                     pm3ds_cfg.language = (pm3ds_cfg.language + 1) % PM3DS_LANG_COUNT;
                     pm3ds_lang_set(pm3ds_cfg.language);
                     break;
+                case OPT_PACK: {   /* the ROM's text -> each pack on the SD card -> the ROM's */
+                    int n = pm3ds_langpack_scan(), cur = -1;
+                    for (int i = 0; i < n; i++)
+                        if (!strcmp(pm3ds_langpack_id(i), pm3ds_cfg.lang_pack)) cur = i;
+                    snprintf(pm3ds_cfg.lang_pack, sizeof pm3ds_cfg.lang_pack, "%s", cur + 1 < n ? pm3ds_langpack_id(cur + 1) : "");
+                    pm3ds_langpack_request(pm3ds_cfg.lang_pack);
+                    break;
+                }
                 case OPT_SCREEN: pm3ds_cfg.view_mode = (pm3ds_cfg.view_mode + 1) % 4; break;   /* Original -> Fill -> Wide -> Sharp wide */
                 case OPT_FPS: pm3ds_cfg.fps60 = !pm3ds_cfg.fps60; break;
                 case OPT_3D: {
@@ -2350,6 +2557,7 @@ static void options_tap(int px, int py) {
                     pm3ds_color_mode_changed();
                     break;
                 case OPT_UPDATE: pm3ds_cfg.update_check = !pm3ds_cfg.update_check; break;   /* from the next launch */
+                case OPT_UPDATE_NOW: pm3ds_update_check_now(); return;   /* GitHub #82 */
             }
             pm3ds_settings_save();
             return;
@@ -2416,7 +2624,8 @@ static void draw_cheats(void) {
     page_title("Cheats", "Tap one to switch it");
     for (int i = 0; i < PM3DS_CHEAT_COUNT; i++) {
         float y = OPT_Y0 + i * CHEAT_ROW_H;
-        bool on = pm3ds_cheat_on(i);
+        /* a Level 99 save has these two whatever the switch says */
+        bool on = pm3ds_cheat_on(i) || (pm3ds_level99() && (i == PM3DS_CHEAT_LEVELS || i == PM3DS_CHEAT_NOCAP));
         tile(CX0, y, CX1, y + CHEAT_ROW_H - 3, 6, on ? COL_SEL : COL_TAB_ON);
         text(CX0 + 7, y, s_cheat_names[i], fit(s_cheat_names[i], 112, 0.72f, 0.5f), 0, COL_WHITE);
         text(CX0 + 124, y + 1, s_cheat_help[i], fit(s_cheat_help[i], 96, 0.58f, 0.45f), 0, COL_HINT);
@@ -2465,6 +2674,155 @@ static void draw_buttons(void) {
     }
 }
 
+/* ---- the title and the file menu by touch (Discord suggestion) ------------- */
+#define TITLE_CARD_Y0 60
+#define TITLE_CARD_Y1 170
+#define TITLE_LANG_Y0 178
+#define TITLE_LANG_Y1 204
+static int s_title_start;   /* steps left of the START a tap on the title's card holds */
+
+#define FM_TILE_X(c) (12 + (c) * 150)
+#define FM_TILE_Y(r) (34 + (r) * 54)
+#define FM_TILE_W 146
+#define FM_TILE_H 50
+#define FM_ROW_Y 144
+#define FM_ROW_H 26
+#define FM_KEY_X0 10
+#define FM_KEY_W 23
+#define FM_KEY_Y0 42
+#define FM_KEY_H 22
+
+static void fm_file_tile(const pm3ds_fm_info_t *q, int i, float x, float y, float w, float h, bool lit) {
+    char line[24];
+    tile(x, y, x + w, y + h, 8, lit ? COL_SEL : q->has[i] ? COL_TAB_ON : COL_OFF);
+    snprintf(line, sizeof line, "%d", i + 1);
+    text(x + 7, y + 4, line, 0.9f, 0, COL_HINT);
+    if (q->has[i]) {
+        text(x + 22, y + 4, q->name[i], fit(q->name[i], w - 28, 0.9f, 0.6f), 0, COL_WHITE);
+        snprintf(line, sizeof line, "Lv %d   %d/7", q->level[i], q->spirits[i]);
+        text(x + 22, y + 26, line, 0.72f, 0, COL_HINT);
+    } else {
+        text(x + 22, y + 4, "New file", fit("New file", w - 28, 0.9f, 0.6f), 0, COL_HINT);
+    }
+}
+
+static void draw_file_menu(void) {
+    pm3ds_fm_info_t q;
+    pm3ds_fm_query(&q);
+    panel(4, 4, 316, 206, COL_PANEL);
+    switch (q.menu) {
+        case PM3DS_FM_MAIN: {
+            static const char *const titles[4] = { "Choose a file", "Choose a file to delete", "Copy which file?", "Copy to which file?" };
+            text_center(160, 11, titles[q.state], 0.95f, 0, COL_WHITE);
+            for (int i = 0; i < 4; i++)
+                fm_file_tile(&q, i, FM_TILE_X(i % 2), FM_TILE_Y(i / 2), FM_TILE_W, FM_TILE_H, q.selected == i);
+            if (q.state == PM3DS_FMS_FILE) {
+                chip(12, FM_ROW_Y, 102, FM_ROW_Y + FM_ROW_H, "Delete", COL_OFF, 0.85f);
+                chip(115, FM_ROW_Y, 205, FM_ROW_Y + FM_ROW_H, "Copy", COL_SEL, 0.85f);
+                chip(218, FM_ROW_Y, 308, FM_ROW_Y + FM_ROW_H, "Back", COL_SEL, 0.85f);
+            } else {
+                chip(100, FM_ROW_Y, 220, FM_ROW_Y + FM_ROW_H, "Cancel", COL_SEL, 0.85f);
+            }
+            break;
+        }
+        case PM3DS_FM_CONFIRM: {
+            static const char *const titles[4] = { "Start this file?", "Delete this file?", "Use this name?", "Copy over this file?" };
+            text_center(160, 11, titles[q.state], 0.95f, 0, COL_WHITE);
+            if (q.state == PM3DS_FMC_CREATE) text_center(160, 56, q.typed, 1.3f, 0, COL_WHITE);
+            else if (q.selected >= 0) fm_file_tile(&q, q.selected, 87, 40, FM_TILE_W, FM_TILE_H, true);
+            chip(40, 112, 150, 148, "Yes", COL_SEL, 1.0f);
+            chip(170, 112, 280, 148, "No", COL_OFF, 1.0f);
+            break;
+        }
+        case PM3DS_FM_MESSAGE: {
+            static const char *const titles[3] = { "File deleted", "File copied", "File created" };
+            text_center(160, 70, titles[q.state], 1.1f, 0, COL_WHITE);
+            chip(105, 112, 215, 148, "OK", COL_SEL, 1.0f);
+            break;
+        }
+        case PM3DS_FM_INPUT: {
+            char label[8];
+            text_center(160, 9, "Enter a file name!", 0.8f, 0, COL_HINT);
+            text_center(160, 22, q.typed[0] ? q.typed : "-", 1.0f, 0, COL_WHITE);
+            int shown = 0;
+            for (int row = 0; row < q.rows; row++) {
+                bool any = false;
+                for (int col = 0; col < q.cols; col++) {
+                    int kind = pm3ds_fm_key(col, row, label);
+                    if (!kind) continue;
+                    float x = FM_KEY_X0 + col * FM_KEY_W, y = FM_KEY_Y0 + shown * FM_KEY_H;
+                    float w = kind == PM3DS_FM_CELL_WIDE ? FM_KEY_W * 3 : FM_KEY_W;
+                    chip(x, y, x + w - 2, y + FM_KEY_H - 2, label, kind == PM3DS_FM_CELL_WIDE ? COL_SEL : COL_TAB_ON, 0.72f);
+                    any = true;
+                }
+                if (any) shown++;
+            }
+            break;
+        }
+        case PM3DS_FM_LANGUAGE:
+            text_center(160, 11, "Language", 0.95f, 0, COL_WHITE);
+            for (int i = 0; i < 4; i++)
+                chip(70, 40 + i * 36, 250, 70 + i * 36, pm3ds_lang_name(i), q.selected == i ? COL_SEL : COL_TAB_ON, 0.9f);
+            break;
+    }
+}
+
+static void fm_page_tap(int px, int py) {
+    pm3ds_fm_info_t q;
+    pm3ds_fm_query(&q);
+    switch (q.menu) {
+        case PM3DS_FM_MAIN:
+            for (int i = 0; i < 4; i++) {
+                if (in(px, py, FM_TILE_X(i % 2), FM_TILE_Y(i / 2), FM_TILE_X(i % 2) + FM_TILE_W, FM_TILE_Y(i / 2) + FM_TILE_H)) {
+                    pm3ds_fm_tap_main(i % 2 ? 2 : 0, i / 2);   /* the menu's grid: files at columns 0 and 2 */
+                    return;
+                }
+            }
+            if (py < FM_ROW_Y || py >= FM_ROW_Y + FM_ROW_H) return;
+            if (q.state != PM3DS_FMS_FILE) {
+                if (in(px, py, 100, FM_ROW_Y, 220, FM_ROW_Y + FM_ROW_H)) pm3ds_fm_tap_main(1, 2);
+            } else if (px >= 12 && px < 102) {
+                pm3ds_fm_tap_main(0, 2);   /* Delete */
+            } else if (px >= 115 && px < 205) {
+                pm3ds_fm_tap_main(1, 2);   /* Copy */
+            } else if (px >= 218 && px < 308) {
+                pm3ds_fm_tap_main(2, 2);   /* the title */
+            }
+            break;
+        case PM3DS_FM_CONFIRM:
+            if (in(px, py, 40, 112, 150, 148)) pm3ds_fm_tap_yesno(true);
+            else if (in(px, py, 170, 112, 280, 148)) pm3ds_fm_tap_yesno(false);
+            break;
+        case PM3DS_FM_MESSAGE:
+            if (in(px, py, 105, 112, 215, 148)) pm3ds_fm_tap_ok();
+            break;
+        case PM3DS_FM_INPUT: {
+            char label[8];
+            int shown = 0;
+            for (int row = 0; row < q.rows; row++) {
+                bool any = false;
+                for (int col = 0; col < q.cols; col++) {
+                    int kind = pm3ds_fm_key(col, row, label);
+                    if (!kind) continue;
+                    float x = FM_KEY_X0 + col * FM_KEY_W, y = FM_KEY_Y0 + shown * FM_KEY_H;
+                    float w = kind == PM3DS_FM_CELL_WIDE ? FM_KEY_W * 3 : FM_KEY_W;
+                    if (in(px, py, x, y, x + w, y + FM_KEY_H)) {
+                        pm3ds_fm_tap_key(col, row);
+                        return;
+                    }
+                    any = true;
+                }
+                if (any) shown++;
+            }
+            break;
+        }
+        case PM3DS_FM_LANGUAGE:
+            for (int i = 0; i < 4; i++)
+                if (in(px, py, 70, 40 + i * 36, 250, 70 + i * 36)) pm3ds_fm_tap_language(i);
+            break;
+    }
+}
+
 /* ---- new-game picker ------------------------------------------------------ */
 /* The file menu (src/filemenu/filemenu_main.c) opens it when an empty file is
  * picked: Classic or Randomizer (and whether the save allows cheats), then
@@ -2494,8 +2852,12 @@ static bool s_ng_kbd;     /* type a seed: the keyboard opens from the tick, outs
 static bool s_ng_cheats;  /* the new save allows cheats (n64_shim/cheats.c) */
 static bool s_ng_hard;    /* the new save is in hard mode (n64_shim/cheats.c) */
 static bool s_ng_skip;    /* the new save skips the intro (n64_shim/cheats.c) */
-#define NG_CHEAT_Y0 178
-#define NG_CHEAT_Y1 200
+static bool s_ng_l99;     /* the new save goes up to level 99 (n64_shim/cheats.c) */
+/* the two cards, then the new save's four switches in two rows under them */
+#define NG_CARD_Y1 136
+#define NG_SW_Y0 143
+#define NG_SW_H 22
+#define NG_SW_GAP 3
 
 void pm3ds_new_game_picker_open(void) {
     s_ng_page = NG_MODE;
@@ -2507,6 +2869,7 @@ void pm3ds_new_game_picker_open(void) {
     s_ng_cheats = false;
     s_ng_hard = false;
     s_ng_skip = false;
+    s_ng_l99 = false;
 }
 
 /* src/filemenu/filemenu_main.c, each frame: -1 while open, 1 once a game
@@ -2536,6 +2899,7 @@ static void ng_start(bool rando) {
     pm3ds_cheats_choose(s_ng_cheats);
     pm3ds_hard_choose(s_ng_hard);
     pm3ds_skip_intro_choose(s_ng_skip);
+    pm3ds_level99_choose(s_ng_l99);
     pm3ds_cfg.rando_flags = s_ng_flags | (rando ? PM3DS_RANDO_ON : 0);
     pm3ds_settings_save();
     ng_close(1, NG_SND_NEXT);
@@ -2611,6 +2975,9 @@ static void ng_buttons(void) {
         } else if (kd & KEY_R) {
             s_ng_skip = !s_ng_skip;
             s_ng_sound = NG_SND_TOGGLE;
+        } else if (kd & KEY_L) {
+            s_ng_l99 = !s_ng_l99;
+            s_ng_sound = NG_SND_TOGGLE;
         } else if (kd & KEY_B) {
             ng_close(0, NG_SND_BACK);
         }
@@ -2638,18 +3005,23 @@ static void ng_buttons(void) {
     }
 }
 
+/* Cheats, Hard mode; Skip intro, Level 99 */
+static bool *ng_switch(int k) {
+    return k == 0 ? &s_ng_cheats : k == 1 ? &s_ng_hard : k == 2 ? &s_ng_skip : &s_ng_l99;
+}
+
 static void ng_touch(int px, int py) {
     if (s_ng_page == NG_MODE) {
-        if (in(px, py, 16, 60, 156, 170)) {
+        if (in(px, py, 16, 60, 156, NG_CARD_Y1)) {
             s_ng_cursor = 0;
             ng_start(false);
-        } else if (in(px, py, 164, 60, 304, 170)) {
+        } else if (in(px, py, 164, 60, 304, NG_CARD_Y1)) {
             s_ng_page = NG_RANDO;
             s_ng_cursor = NG_ROW_START;
             s_ng_sound = NG_SND_NEXT;
-        } else if (py >= NG_CHEAT_Y0 && py < NG_CHEAT_Y1 && px >= 16 && px < 304) {
-            int k = (px - 16) / 96;   /* Cheats, Hard mode, Skip intro */
-            bool *sw = k == 0 ? &s_ng_cheats : k == 1 ? &s_ng_hard : &s_ng_skip;
+        } else if (py >= NG_SW_Y0 && py < NG_SW_Y0 + 2 * NG_SW_H + NG_SW_GAP && px >= 16 && px < 304) {
+            int k = ((py - NG_SW_Y0) >= NG_SW_H + NG_SW_GAP / 2 ? 2 : 0) + (px >= 160 ? 1 : 0);
+            bool *sw = ng_switch(k);
             *sw = !*sw;
             s_ng_sound = NG_SND_TOGGLE;
         } else if (in(px, py, 8, 212, 88, 236)) {
@@ -2708,26 +3080,28 @@ static void draw_new_game(float w) {
         for (int i = 0; i < 2; i++) {
             float x0 = dx + (i ? 164 : 16), x1 = x0 + 140;
             bool lit = s_ng_cursor == i;
-            if (lit) round_rect(x0 - 4, 56, x1 + 4, 174, 12, RGBA(255, 196, 64, 255));
-            round_rect(x0, 60, x1, 170, 10, COL_PANEL_EDGE);
-            round_rect(x0 + 2, 62, x1 - 2, 168, 8, lit ? RGBA(255, 214, 120, 255) : COL_TAB);
-            text_center((x0 + x1) / 2, 86, names[i], 1.2f, 0, COL_WHITE);
-            small_text_center((x0 + x1) / 2, 124, desc[i][0], 1.0f, COL_PANEL_EDGE);
-            small_text_center((x0 + x1) / 2, 136, desc[i][1], 1.0f, COL_PANEL_EDGE);
+            if (lit) round_rect(x0 - 4, 56, x1 + 4, NG_CARD_Y1 + 4, 12, RGBA(255, 196, 64, 255));
+            round_rect(x0, 60, x1, NG_CARD_Y1, 10, COL_PANEL_EDGE);
+            round_rect(x0 + 2, 62, x1 - 2, NG_CARD_Y1 - 2, 8, lit ? RGBA(255, 214, 120, 255) : COL_TAB);
+            text_center((x0 + x1) / 2, 68, names[i], 1.2f, 0, COL_WHITE);
+            small_text_center((x0 + x1) / 2, 104, desc[i][0], 1.0f, COL_PANEL_EDGE);
+            small_text_center((x0 + x1) / 2, 116, desc[i][1], 1.0f, COL_PANEL_EDGE);
         }
         /* switches for the new save, set once: cheats (used from Options > Cheats in game)
-         * and hard mode (GitHub #69) */
-        for (int k = 0; k < 3; k++) {
-            float x0 = dx + 16 + k * 96, x1 = x0 + 92;
-            bool on = k == 0 ? s_ng_cheats : k == 1 ? s_ng_hard : s_ng_skip;
-            const char *label = k == 0 ? "Cheats" : k == 1 ? "Hard mode" : "Skip intro";
-            round_rect(x0, NG_CHEAT_Y0, x1, NG_CHEAT_Y1, 8, on ? RGBA(255, 214, 120, 150) : RGBA(205, 190, 170, 120));
-            text(x0 + 5, NG_CHEAT_Y0 + 4, label, fit(label, 50, 0.8f, 0.45f), 0, COL_WHITE);
-            round_rect(x1 - 34, NG_CHEAT_Y0 + 2, x1 - 3, NG_CHEAT_Y1 - 2, 8, COL_PANEL_EDGE);
-            round_rect(x1 - 32, NG_CHEAT_Y0 + 4, x1 - 5, NG_CHEAT_Y1 - 4, 6, on ? RGBA(255, 214, 120, 255) : RGBA(205, 190, 170, 255));
-            text_center(x1 - 18, NG_CHEAT_Y0 + 3, on ? "On" : "Off", 0.8f, 0, COL_WHITE);
+         * hard mode (GitHub #69), level 99 (GitHub #83) */
+        for (int k = 0; k < 4; k++) {
+            float x0 = dx + (k & 1 ? 164 : 16), x1 = x0 + 140;
+            float y0 = NG_SW_Y0 + (k >> 1) * (NG_SW_H + NG_SW_GAP), y1 = y0 + NG_SW_H;
+            bool on = *ng_switch(k);
+            static const char *const labels[4] = { "Cheats", "Hard mode", "Skip intro", "Level 99" };
+            round_rect(x0, y0, x1, y1, 8, on ? RGBA(255, 214, 120, 150) : RGBA(205, 190, 170, 120));
+            text(x0 + 6, y0 + 4, labels[k], fit(labels[k], 96, 0.8f, 0.45f), 0, COL_WHITE);
+            round_rect(x1 - 34, y0 + 2, x1 - 3, y1 - 2, 8, COL_PANEL_EDGE);
+            round_rect(x1 - 32, y0 + 4, x1 - 5, y1 - 4, 6, on ? RGBA(255, 214, 120, 255) : RGBA(205, 190, 170, 255));
+            text_center(x1 - 18, y0 + 3, on ? "On" : "Off", 0.8f, 0, COL_WHITE);
         }
-        small_text_center(dx + 206, 219, "Y: cheats  X: hard  R: skip", 1.0f, COL_PANEL_EDGE);
+        /* 8 px a character (10 a Chinese one): narrowed to fit between Back (to x 88) and the edge */
+        small_text_center_in(dx + 204, 219, "Y:cheats X:hard R:skip L:99", 1.0f, 224, COL_PANEL_EDGE);
         ng_button(dx + 8, 212, dx + 88, 234, "Back", false);
         return;
     }
@@ -2856,11 +3230,17 @@ static void draw_menu_page(void) {
         else draw_cheats();
         return;
     }
+    if (!s_info.in_game && pm3ds_fm_active()) {
+        draw_file_menu();
+        draw_buttons();
+        return;
+    }
     if (!s_info.in_game) {
-        panel(20, 60, 300, 170, COL_PANEL);
+        panel(20, TITLE_CARD_Y0, 300, TITLE_CARD_Y1, COL_PANEL);
         text_center(160, 78, PM3DS_APP_NAME, 2.0f, 0, COL_WHITE);
-        text_center(160, 124, s_info.demo ? "- Demo -" : "Press START to play", 1.0f, 0, COL_WHITE);
+        text_center(160, 124, s_info.demo ? "- Demo -" : "Tap or press START", 1.0f, 0, COL_WHITE);
         small_text_center(160, 154, "v" PM3DS_VERSION_STR, 1.0f, COL_PANEL_EDGE);
+        if (pm3ds_title_has_language() && !s_info.demo) chip(90, TITLE_LANG_Y0, 230, TITLE_LANG_Y1, "Game language", COL_SEL, 0.8f);
         { extern bool pm3ds_low_memory_start(void);
           if (pm3ds_low_memory_start()) small_text_center(160, 172, T("Low memory start: close and reopen the game"), 1.0f, COL_PANEL_EDGE); }
         draw_buttons();
@@ -2980,6 +3360,10 @@ static void handle_touch(void) {
         if (mid_button(&mid_pad) && mid_pad && in(tp.px, tp.py, s_btn_items[0], BTN_Y0, s_btn_items[1], BTN_Y1))
             pm3ds_touch_pad |= mid_pad;
     }
+    if (s_title_start > 0) {   /* a tap on the title's card: START, long enough for a game step to see it */
+        s_title_start--;
+        pm3ds_touch_pad |= 0x1000;
+    }
     if (!pressed) return;
     drag_dist = 0;
     if (s_ng_page != NG_CLOSED) {
@@ -3059,6 +3443,15 @@ static void handle_touch(void) {
         s_tab = TAB_OPTIONS;
     } else if (in(tp.px, tp.py, s_btn_ff[0], BTN_Y0, s_btn_ff[1], BTN_Y1)) {
         pm3ds_ff_button_on = !pm3ds_ff_button_on;
+    } else if (!s_info.in_game && pm3ds_fm_active()) {
+        fm_page_tap(tp.px, tp.py);
+    } else if (!s_info.in_game && in(tp.px, tp.py, 20, TITLE_CARD_Y0, 300, TITLE_CARD_Y1)) {
+        pm3ds_title_pick(false);
+        s_title_start = 4;
+    } else if (!s_info.in_game && !s_info.demo && pm3ds_title_has_language()
+               && in(tp.px, tp.py, 90, TITLE_LANG_Y0, 230, TITLE_LANG_Y1)) {
+        pm3ds_title_pick(true);
+        s_title_start = 4;
     } else if (s_info.in_game && in(tp.px, tp.py, s_btn_items[0], BTN_Y0, s_btn_items[1], BTN_Y1)) {
         uint16_t mid_pad;
         const char *mid = mid_button(&mid_pad);
@@ -3195,6 +3588,9 @@ static void end_ui(void) {
  * targets (top_right NULL without 3D), for the new-game picker */
 void pm3ds_bottom_screen_render(C3D_RenderTarget *top, C3D_RenderTarget *top_right) {
     bool after = false;
+#if VERSION_IQUE
+    s_ui_frame++;
+#endif
     if (s_ng_page != NG_CLOSED) {
         C3D_RenderTarget *eyes[2] = { top, top_right };
         for (int i = 0; i < 2; i++) {
@@ -3213,17 +3609,42 @@ void pm3ds_bottom_screen_render(C3D_RenderTarget *top, C3D_RenderTarget *top_rig
 }
 
 /* 8x8 console-font text at an integer scale, centred on cx */
-static void small_text_center(float cx, float y, const char *str, float scale, u32 c) {
+/* the width small_text_center gives str (already in the UI encoding) at scale 1 */
+static float small_text_width(const char *str) {
+    float w = 0;
+    for (int len; *str; str += len) w += pm3ds_txt_next(str, &len) & 0x80000000u ? 10 : 8;
+    return w;
+}
+
+/* centred 8x8 console-font text, in the chosen language; narrowed to max_w
+ * (0: the screen) when a translation is longer */
+static void small_text_center_in(float cx, float y, const char *str, float scale, float max_w, u32 c) {
     if (!s_small_ok) return;
-    float x = cx - strlen(str) * 4.0f * scale;
-    for (; *str; str++, x += 8 * scale) {
-        unsigned char ch = (unsigned char)*str;
+    str = T(str);
+    float w = small_text_width(str) * scale;
+    if (max_w <= 0) max_w = 312;
+    if (w > max_w) { scale *= max_w / w; w = max_w; }
+    float x = cx - w / 2;
+    for (int len; *str; str += len) {
+        uint32_t cp = pm3ds_txt_next(str, &len);
+        if (cp & 0x80000000u) {   /* Chinese, Japanese */
+            sys_glyph(x - scale, y - 2 * scale, cp & 0x1FFFFF, 0.72f * scale, c, true);
+            x += 10 * scale;
+            continue;
+        }
+        unsigned char ch = (unsigned char)cp;
+        if (ch >= 0x80 && ch < 0xB0) ch = (unsigned char)"AAAACEEEEIIIINOOOOUUUUsaaaaceeeeiiiinoooouuuu!?a"[ch - 0x80];   /* accents: the console font has none */
         if (ch > 32 && ch < 128) {
             float gx = (ch % 16) * 8.0f, gy = (ch / 16) * 8.0f;
             quad2(&s_small, x, y, x + 8 * scale, y + 8 * scale,
                   gx / 128.0f, gy / 64.0f, (gx + 8) / 128.0f, (gy + 8) / 64.0f, c, c);
         }
+        x += 8 * scale;
     }
+}
+
+static void small_text_center(float cx, float y, const char *str, float scale, u32 c) {
+    small_text_center_in(cx, y, str, scale, 0, c);
 }
 
 static const char *s_loading_label;

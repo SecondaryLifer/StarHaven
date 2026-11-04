@@ -46,13 +46,19 @@ Vp D_8014C280 = {
 };
 
 #if !VERSION_JP
-u8 MessagePlural[] = { MSG_CHAR_LOWER_S, MSG_CHAR_READ_END };
+#ifdef _3DS
+// 3DS: room for a language pack's endings (port/3ds/source/n64_shim/langpack.c)
+#define MSG_ENDING_SIZE 8
+#else
+#define MSG_ENDING_SIZE
+#endif
+u8 MessagePlural[MSG_ENDING_SIZE] = { MSG_CHAR_LOWER_S, MSG_CHAR_READ_END };
 
 #if VERSION_PAL
-u8 MessagePlural_de[] = { MSG_CHAR_LOWER_N, MSG_CHAR_READ_END };
+u8 MessagePlural_de[MSG_ENDING_SIZE] = { MSG_CHAR_LOWER_N, MSG_CHAR_READ_END };
 #endif
 
-u8 MessageSingular[] = { MSG_CHAR_READ_ENDL, MSG_CHAR_READ_END };
+u8 MessageSingular[MSG_ENDING_SIZE] = { MSG_CHAR_READ_ENDL, MSG_CHAR_READ_END };
 #endif
 
 #if VERSION_PAL
@@ -1418,6 +1424,19 @@ void initialize_printer(MessagePrintState* printer, s32 arg1, s32 arg2) {
     printer->sizeScale = 1.0f;
 }
 
+#ifdef _3DS
+// 3DS: a language pack's text first (GitHub #84, port/3ds/source/n64_shim/langpack.c).
+// Every caller's buffer holds 0x400 bytes but the credits' (Credits.inc.c, its own limit).
+#include "pm3ds_langpack.h"
+static void dma_load_msg_rom(u32 msgID, void* dest);
+void dma_load_msg(u32 msgID, void* dest) {
+    if (!pm3ds_langpack_msg(msgID, dest, 0x400)) {
+        dma_load_msg_rom(msgID, dest);
+    }
+}
+#define dma_load_msg dma_load_msg_rom
+#endif
+
 #if VERSION_PAL
 void dma_load_msg(u32 msgID, void* dest) {
     u8* langPtr = D_PAL_8014AE50[gCurrentLanguage];
@@ -1462,6 +1481,9 @@ void dma_load_msg(u32 msgID, void* dest) {
     // Load the msg data
     dma_copy(MSG_ROM_START + offset[0], MSG_ROM_START + offset[1], dest);
 }
+#endif
+#ifdef _3DS
+#undef dma_load_msg
 #endif
 
 s8* load_message_to_buffer(s32 msgID) {

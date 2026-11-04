@@ -18,6 +18,7 @@
 #include <string.h>
 
 #include "gfx_state.h"
+#include "pm3ds_addr.h"
 #include "pm3ds_gfx_tags.h"
 #include "pm3ds_log.h"
 #ifndef PM3DS_HOST_TEST
@@ -304,7 +305,13 @@ static void handle_vtx(gfx_state_t *st, const gfx_cmd_t *g) {
      * x * scale / 65536 == x * (scale / 65536) exactly: a power-of-two step */
     const uint32_t gm = st->geometry_mode;
     const float tss = st->tex_scale_s * (1.0f / 65536.0f), tst = st->tex_scale_t * (1.0f / 65536.0f);
-    const float stereo = pm3ds_stereo_shift;
+    /* A small viewport is a picture in a window (Goombario's tattle: 138x99, its camera a
+     * close-up of the enemy). The disparity above is tuned for the field camera, so a close-up
+     * popped out far more than the eyes can fuse at the top of the slider (Discord, 1.3.10);
+     * such a window stays on the screen plane, like its frame. Full width is 320 * 2; the
+     * narrowest scene viewports elsewhere are 262 wide (some battles), so 200 only catches
+     * windows like that one. */
+    const float stereo = st->vp_scale[0] < 200 * 2 ? 0.0f : pm3ds_stereo_shift;
 
     for (int i = 0; i < n; i++) {
         const n64_vtx_t *v = &src[i];
@@ -748,7 +755,11 @@ static void handle_loadtlut(gfx_state_t *st, const gfx_cmd_t *g) {
     int base = (int)t->tmem - 256;          /* one TLUT entry per TMEM word */
     if (base < 0 || base >= 256) return;
     if (base + count > 256) count = 256 - base;
-    if (!addr_plausible(st->timg_addr)) return;
+    /* a palette is 16-bit entries: it may start on any halfword, and it may be
+     * read from the cart (Darth-Koopa's iQue fork: the word-only host check
+     * dropped such palette loads) */
+    uint32_t ta = st->timg_addr;
+    if (!pm3ds_addr_is_rom_tagged(ta) && ((ta & 1) || !addr_plausible(ta & ~3u))) return;
     pm3ds_pi_read(st->timg_addr, &st->tlut[base * 2], (uint32_t)count * 2);
     for (int bank = base / 16; bank <= (base + count - 1) / 16 && bank < 16; bank++) {
         st->tlut_src[bank] = st->timg_addr + (uint32_t)(bank * 16 - base) * 2;

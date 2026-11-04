@@ -5,6 +5,11 @@
  *   TR("English", "Deutsch", "Français", "Español", "Italiano", "日本語")
  * in UTF-8 (NULL: not translated, English is used). The chosen language's
  * column is converted to the UI encoding once, when the language is set.
+ *
+ * Simplified Chinese comes from its own file, pm3ds_lang_zh.inc (generated
+ * from localization/ui_translations_zh_CN.csv by tools/gen_lang_zh.py), as
+ * ZH("English", "中文"). It also covers English text the table doesn't list
+ * (partner and area names, ...), so in Chinese T() looks there instead.
  */
 #include <3ds.h>
 #include <stdlib.h>
@@ -25,8 +30,20 @@ static const tr_entry_t s_table[] = {
 #undef TR
 #define NUM_TR (sizeof s_table / sizeof s_table[0])
 
+typedef struct {
+    const char *en, *zh;
+} zh_entry_t;
+
+#define ZH(en, zh) { en, zh },
+static const zh_entry_t s_zh[] = {
+#include "pm3ds_lang_zh.inc"
+};
+#undef ZH
+#define NUM_ZH (sizeof s_zh / sizeof s_zh[0])
+
 static const char *const s_names_utf8[PM3DS_LANG_COUNT] = {
     "English", "Deutsch", "Fran\u00e7ais", "Espa\u00f1ol", "Italiano", "\u65e5\u672c\u8a9e",
+    "\u7b80\u4f53\u4e2d\u6587",
 };
 
 /* the game's font: Latin-1 letters to message codes 0x60-0x8F (+ 0x20 in UI text) */
@@ -73,11 +90,12 @@ size_t pm3ds_lang_encode(const char *utf8, char *out, size_t size) {
 }
 
 static int s_lang = -1;
-static const char **s_conv;    /* NUM_TR strings in the UI encoding, for s_lang */
+static const char **s_conv;    /* NUM_TR (NUM_ZH in Chinese) strings in the UI encoding, for s_lang */
+static int s_nconv;
 
 /* English -> entry: an open-addressed hash of the English column */
 #define HASH_SLOTS 1024
-static int16_t s_hash[HASH_SLOTS];
+static int16_t s_hash[HASH_SLOTS], s_zh_hash[HASH_SLOTS];
 static bool s_hashed;
 
 static uint32_t hash_str(const char *s) {
@@ -86,14 +104,28 @@ static uint32_t hash_str(const char *s) {
     return h;
 }
 
+static void hash_add(int16_t *hash, const char *en, int i) {
+    uint32_t h = hash_str(en) & (HASH_SLOTS - 1);
+    while (hash[h] >= 0) h = (h + 1) & (HASH_SLOTS - 1);
+    hash[h] = (int16_t)i;
+}
+
 static void build_hash(void) {
     memset(s_hash, 0xFF, sizeof s_hash);
-    for (int i = 0; i < (int)NUM_TR; i++) {
-        uint32_t h = hash_str(s_table[i].text[0]) & (HASH_SLOTS - 1);
-        while (s_hash[h] >= 0) h = (h + 1) & (HASH_SLOTS - 1);
-        s_hash[h] = (int16_t)i;
-    }
+    memset(s_zh_hash, 0xFF, sizeof s_zh_hash);
+    for (int i = 0; i < (int)NUM_TR; i++) hash_add(s_hash, s_table[i].text[0], i);
+    for (int i = 0; i < (int)NUM_ZH; i++) hash_add(s_zh_hash, s_zh[i].en, i);
     s_hashed = true;
+}
+
+/* the entry whose English text is en, or -1 */
+static int lookup(const int16_t *hash, const char *en, bool zh) {
+    uint32_t h = hash_str(en) & (HASH_SLOTS - 1);
+    for (int probe = 0; probe < HASH_SLOTS && hash[h] >= 0; probe++, h = (h + 1) & (HASH_SLOTS - 1)) {
+        int i = hash[h];
+        if (!strcmp(zh ? s_zh[i].en : s_table[i].text[0], en)) return i;
+    }
+    return -1;
 }
 
 const char *pm3ds_lang_name(int lang) {
@@ -110,24 +142,29 @@ void pm3ds_lang_set(int lang) {
     if (lang == s_lang && s_conv) return;
     if (!s_hashed) build_hash();
     if (s_conv) {
-        for (int i = 0; i < (int)NUM_TR; i++) free((void *)s_conv[i]);
+        for (int i = 0; i < s_nconv; i++) free((void *)s_conv[i]);
         free(s_conv);
     }
     s_lang = lang;
-    s_conv = (const char **)calloc(NUM_TR, sizeof *s_conv);
+    s_nconv = lang == PM3DS_LANG_ZH ? (int)NUM_ZH : (int)NUM_TR;
+    s_conv = (const char **)calloc((size_t)s_nconv, sizeof *s_conv);
     if (!s_conv) return;
-    for (int i = 0; i < (int)NUM_TR; i++) {
-        const char *src = s_table[i].text[lang] ? s_table[i].text[lang] : s_table[i].text[0];
-        size_t cap = strlen(src) * 2 + 1;
+    for (int i = 0; i < s_nconv; i++) {
+        const char *src = lang == PM3DS_LANG_ZH ? s_zh[i].zh
+                        : s_table[i].text[lang] ? s_table[i].text[lang] : s_table[i].text[0];
+        size_t cap = strlen(src) * 2 + 1;   /* a 3-byte UTF-8 character takes 4 bytes */
         char *dst = (char *)malloc(cap);
         if (!dst) continue;
         pm3ds_lang_encode(src, dst, cap);
         s_conv[i] = dst;
     }
-    pm3ds_log(PM3DS_LOG_INFO, "lang: %d (%u strings)", lang, (unsigned)NUM_TR);
+    pm3ds_log(PM3DS_LOG_INFO, "lang: %d (%d strings)", lang, s_nconv);
 }
 
 int pm3ds_lang_from_system(void) {
+#if VERSION_IQUE
+    return PM3DS_LANG_ZH;   /* the game itself is in Chinese */
+#endif
     u8 l = CFG_LANGUAGE_EN;
     if (R_SUCCEEDED(cfguInit())) {
         CFGU_GetSystemLanguage(&l);
@@ -139,6 +176,7 @@ int pm3ds_lang_from_system(void) {
         case CFG_LANGUAGE_ES: return PM3DS_LANG_ES;
         case CFG_LANGUAGE_IT: return PM3DS_LANG_IT;
         case CFG_LANGUAGE_JP: return PM3DS_LANG_JA;
+        case CFG_LANGUAGE_ZH: return PM3DS_LANG_ZH;
         default:              return PM3DS_LANG_EN;
     }
 }
@@ -147,10 +185,7 @@ const char *T(const char *en) {
     if (!en) return "";
     if (!s_conv) pm3ds_lang_set(pm3ds_cfg.language);
     if (!s_conv || !s_hashed) return en;
-    uint32_t h = hash_str(en) & (HASH_SLOTS - 1);
-    for (int probe = 0; probe < HASH_SLOTS && s_hash[h] >= 0; probe++, h = (h + 1) & (HASH_SLOTS - 1)) {
-        int i = s_hash[h];
-        if (!strcmp(s_table[i].text[0], en)) return s_conv[i] ? s_conv[i] : en;
-    }
-    return en;
+    bool zh = s_lang == PM3DS_LANG_ZH;
+    int i = lookup(zh ? s_zh_hash : s_hash, en, zh);
+    return i >= 0 && s_conv[i] ? s_conv[i] : en;
 }

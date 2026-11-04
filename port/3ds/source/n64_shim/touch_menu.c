@@ -18,6 +18,10 @@
 #include <string.h>
 
 #include "pm3ds_touch_menu.h"
+#include "pm3ds_lang.h"
+#if VERSION_IQUE
+#include "ique_charmap.inc"
+#endif
 
 void dma_load_msg(u32 msgID, void* dest);
 
@@ -115,6 +119,31 @@ static void decode_msg_as(s32 msgID, char* out, s32 size, bool dialogue) {
             }
             u8 style = m[++i];   // arguments as msg.c reads them
             i += style == MSG_STYLE_CHOICE ? 4 : style == MSG_STYLE_POSTCARD ? 1 : 0;
+#if VERSION_IQUE
+        } else if (c >= MSG_CHAR_MULTIBYTE_FIRST && c <= MSG_CHAR_MULTIBYTE_LAST) {
+            /* a Chinese character: a lead and a trail byte (src/msg_draw.c), kept
+             * as its code point (pm3ds_lang.h), drawn with the ROM's font */
+            u8 trail = m[i + 1];
+            if (trail == 0 || trail >= 0xF0) {
+                continue;   // not a pair: leave the next byte to the loop
+            }
+            i++;
+            s32 glyph = (MSG_CHAR_ZH_START - MSG_CHAR_MULTIBYTE_FIRST) + c +
+                        (trail - 1) * (MSG_CHAR_MULTIBYTE_LAST - MSG_CHAR_MULTIBYTE_FIRST + 1);
+            u32 cp = glyph >= PM3DS_IQUE_GLYPH_FIRST && glyph < PM3DS_IQUE_GLYPH_END
+                         ? pm3ds_ique_glyph_cp[glyph - PM3DS_IQUE_GLYPH_FIRST] : 0;
+            if (cp == 0) {
+                out[n++] = '?';
+                continue;
+            }
+            if (n + 4 >= size) {
+                break;
+            }
+            out[n++] = PM3DS_TXT_ESC;
+            out[n++] = (char)(0x80 | (cp >> 14));
+            out[n++] = (char)(0x80 | ((cp >> 7) & 0x7F));
+            out[n++] = (char)(0x80 | (cp & 0x7F));
+#endif
         } else if (c < 0xF0 && c + 0x20 < 0x100) {
             out[n++] = (char)(c + 0x20);
         }

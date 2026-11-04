@@ -78,6 +78,19 @@ int pm3ds_audio_init(void) {
     }
     Result rc = ndspInit();
     if (R_FAILED(rc)) {
+        /* GitHub #81: no sdmc:/3ds/dspfirm.cdc on an emulator. Azahar's CSND makes no sound at
+         * all (measured), while its HLE DSP never runs the firmware it is given, only logs its
+         * hash, so a blank one starts NDSP. Not for a console: the real DSP would run it. */
+        s64 emu = 0;
+        if (R_SUCCEEDED(svcGetSystemInfo(&emu, 0x20000, 0)) && emu != 0) {
+            static const u8 no_firmware[0x400] __attribute__((aligned(4)));
+            ndspUseComponent(no_firmware, sizeof no_firmware, 0xFF, 0xFF);
+            rc = ndspInit();
+            pm3ds_log(PM3DS_LOG_WARN, "emulator without dspfirm.cdc: NDSP on a blank component, rc=0x%08lX",
+                      (unsigned long)rc);
+        }
+    }
+    if (R_FAILED(rc)) {
         pm3ds_log(PM3DS_LOG_WARN,
                   "ndspInit failed (rc=0x%08lX); trying CSND fallback. "
                   "(NDSP needs dspfirm.cdc; CSND is the legacy path that "

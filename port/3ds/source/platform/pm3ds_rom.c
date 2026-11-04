@@ -381,7 +381,11 @@ static void show_problem(const rom_status_t *st) {
         l_detail,
         "",
         "Put your own Paper Mario ROM",
+#if VERSION_IQUE
+        "(the iQue Player's) on the SD card",
+#else
         "(USA or Europe) on the SD card",
+#endif
         "in " PM3DS_SD_DIR_SHOWN ", any file name",
         "(.z64, .n64 or .v64)",
         "",

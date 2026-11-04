@@ -21,8 +21,15 @@ enum {
 enum { PM3DS_TM_COST_NONE, PM3DS_TM_COST_FP, PM3DS_TM_COST_SP, PM3DS_TM_COST_COINS, PM3DS_TM_COST_STAR_PIECES,
        PM3DS_TM_COST_HP };
 
+/* the UI encoding (pm3ds_lang.h): the iQue ROM's Chinese names take 4 bytes a character */
+#if VERSION_IQUE
+#define PM3DS_TM_NAME 72
+#else
+#define PM3DS_TM_NAME 28
+#endif
+
 typedef struct {
-    char name[28];      /* the game's font codes + 0x20: ASCII for plain text */
+    char name[PM3DS_TM_NAME];   /* the game's font codes + 0x20: ASCII for plain text */
     int16_t cost;       /* move cost, price; HP for a target (-1 unknown) */
     int16_t max_hp;     /* targets */
     uint8_t cost_kind;  /* PM3DS_TM_COST_* */
@@ -41,7 +48,7 @@ typedef struct {
     int cursor;
     int all_targets;    /* TARGET: the move hits every target, any tap confirms */
     int partner;        /* the partner's turn (battle menus) */
-    char title[28];
+    char title[PM3DS_TM_NAME];
     pm3ds_tm_entry_t e[PM3DS_TM_MAX];
 } pm3ds_touch_menu_t;
 

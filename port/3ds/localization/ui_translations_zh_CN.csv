@@ -1,0 +1,388 @@
+﻿category,source_file,english_source,proposed_simplified_chinese,review_notes
+Navigation,bottom_screen.c,Stats,状态,
+Navigation,bottom_screen.c,Map,地图,
+Navigation,bottom_screen.c,Party,同伴,“同伴”一词请确认是否采用神游版用语
+Navigation,bottom_screen.c,Tattle,扫描,Tattle 的游戏内术语待校对；也可考虑“调查”
+Navigation,bottom_screen.c,Found,收集,也可用“已发现”，需结合页面含义确认
+Navigation,bottom_screen.c,Settings,设置,
+Navigation,bottom_screen.c,Controls,按键,也可用“操作/按键设置”
+Navigation,bottom_screen.c,Debug,调试,开发者功能；若面向玩家可考虑隐藏
+Battle menu,touch_menu.c,Peach,桃花公主,1.2.15 新增的最终战公主行动菜单标题。
+Stats and found,bottom_screen.c,Save,保存,
+Stats and found,bottom_screen.c,Sure?,确定？,
+Stats and found,bottom_screen.c,Saved!,已保存！,
+Stats and found,bottom_screen.c,Not now,无法保存,
+Stats and found,bottom_screen.c,Prologue,序章,
+Stats and found,bottom_screen.c,Chapter 1,第1章,
+Stats and found,bottom_screen.c,Chapter 2,第2章,
+Stats and found,bottom_screen.c,Chapter 3,第3章,
+Stats and found,bottom_screen.c,Chapter 4,第4章,
+Stats and found,bottom_screen.c,Chapter 5,第5章,
+Stats and found,bottom_screen.c,Chapter 6,第6章,
+Stats and found,bottom_screen.c,Chapter 7,第7章,
+Stats and found,bottom_screen.c,Chapter 8,第8章,
+Stats and found,bottom_screen.c,Epilogue,尾声,
+Stats and found,bottom_screen.c,Nothing to find here,此处没有可收集的物品,
+Stats and found,bottom_screen.c,Found in this area,此区域收集进度,
+Stats and found,bottom_screen.c,The spots hold shuffled items:,此处物品已被随机打乱：,
+Stats and found,bottom_screen.c,only the totals count.,只统计总数。,
+Stats and found,bottom_screen.c,Star Pieces,星之碎片,游戏术语待校对；确认是否用“星之碎片”
+Stats and found,bottom_screen.c,Badges,勋章,
+Stats and found,bottom_screen.c,Hidden,隐藏要素,当前统计隐藏砖块和隐藏面板，需确认标签是否足够准确
+Stats and found,bottom_screen.c,Nothing to find in this room,此房间没有可收集物品,
+Stats and found,bottom_screen.c,This room: all found,此房间已全部收集,
+Map,bottom_screen.c,Centre,居中,
+Map,bottom_screen.c,Drag to look,拖动查看,
+Map,bottom_screen.c,Back,返回,
+Party,bottom_screen.c,No partner yet,尚未拥有同伴,
+Party,bottom_screen.c,Tap a partner to switch,点击同伴即可切换,
+Tattle,bottom_screen.c,Tattle Log,扫描记录,“Tattle”对应游戏术语待校对
+Tattle,bottom_screen.c,Max HP,最大HP,若整体中文化可写“最大体力”
+Tattle,bottom_screen.c,Attack,攻击力,
+Tattle,bottom_screen.c,Defense,防御力,
+Tattle,bottom_screen.c,Max HP:,最大HP：,这是解析原版 Tattle 文本中的字段标记；若更改需同步 tattle_stat()
+Tattle,bottom_screen.c,Attack Power:,攻击力：,这是解析原版 Tattle 文本中的字段标记；若更改需同步 tattle_stat()
+Tattle,bottom_screen.c,Defense Power:,防御力：,这是解析原版 Tattle 文本中的字段标记；若更改需同步 tattle_stat()
+Tattle,bottom_screen.c,No tattles yet,还没有敌人资料,
+Tattle,bottom_screen.c,Tattle enemies in battle with Goombario,在战斗中让酷栗欧扫描敌人,Goombario 为同伴专名，需校对；句子也可更自然地意译
+Tattle,bottom_screen.c,Checked,已完成,
+Tattle,bottom_screen.c,All,全部,
+Battle touch UI,bottom_screen.c,Targets: all,目标：所有敌人,
+Battle touch UI,bottom_screen.c,Tap an enemy,点击敌人,
+Battle touch UI,bottom_screen.c,Pick a command,选择命令,
+Battle touch UI,bottom_screen.c,Tap a target,点击目标,
+Battle touch UI,bottom_screen.c,Action command,行动命令,含义指战斗中的动作命令判定，术语待校对
+Battle touch UI,bottom_screen.c,Tap or hold,点击或按住,
+Battle touch UI,bottom_screen.c,hold,按住,
+Battle touch UI,bottom_screen.c,< Stick,< 摇杆,需确认是否想显示“摇杆”或保留“摇杆图标”
+Battle touch UI,touch_menu.c,Mario,马力欧,按任天堂简中译名；请确认采用的官方人名风格
+Battle touch UI,touch_menu.c,Partners,同伴,
+Battle touch UI,touch_menu.c,Sell,卖东西,
+Battle touch UI,touch_menu.c,Trade,交换,
+Battle touch UI,touch_menu.c,Items,物品,
+Battle touch UI,touch_menu.c,Target,目标,
+Options,bottom_screen.c,Original,原始,也可用“原始”
+Options,bottom_screen.c,Fill,填充,
+Options,bottom_screen.c,Wide,宽屏,
+Options,bottom_screen.c,Sharp wide,清晰宽屏,
+Options,bottom_screen.c,Screen,屏幕,
+Options,bottom_screen.c,Frame rate,速率,
+Options,bottom_screen.c,3D depth,3D 景深,
+Options,pm3ds_settings.c,Low,低,
+Options,pm3ds_settings.c,Normal,普通,
+Options,pm3ds_settings.c,Deep,深,
+Options,pm3ds_settings.c,Deeper,较深,
+Options,pm3ds_settings.c,Deepest,最深,
+Options,bottom_screen.c,Off (Old 3DS),关闭（老 3DS）,
+Options,bottom_screen.c,Text speed,文本速度,
+Options,bottom_screen.c,Fast,快速,
+Options,bottom_screen.c,Instant,即时,
+Options,bottom_screen.c,Fast-forward speed,快进速度,
+Options,bottom_screen.c,Fast-forward button,快进按键,
+Options,bottom_screen.c,Toggle,切换,
+Options,bottom_screen.c,Hold,按住,
+Options,bottom_screen.c,Update check,检查更新,
+Options,bottom_screen.c,Heart & flower drops,心 & 鲜花掉落,
+Options,bottom_screen.c,Low HP beep,低HP哔哔,
+Options / New game,bottom_screen.c,On,开启,同一短标签同时用于设置页和新游戏随机模式页。
+Options / New game,bottom_screen.c,Off,关闭,同一短标签同时用于设置页和新游戏随机模式页。
+Options,bottom_screen.c,Defaults,恢复默认,
+Options,bottom_screen.c,Tap an action to change it,点击选项更改按键,
+Options,bottom_screen.c,Fast >> on,快进 >> 开启,
+Options,bottom_screen.c,Fast >>,快进 >>,
+New game/randomizer,bottom_screen.c,New game,新游戏,
+New game/randomizer,bottom_screen.c,How do you want to play?,选择游戏模式,
+New game/randomizer,bottom_screen.c,Classic,经典模式,
+New game/randomizer,bottom_screen.c,Items & badges,物品与勋章,
+New game/randomizer,bottom_screen.c,in new places,出现在新的位置,
+New game/randomizer,bottom_screen.c,Randomizer,随机模式,是否采用“随机化”或“随机模式”请校对
+New game/randomizer,bottom_screen.c,Items and badges are always shuffled.,物品和勋章的位置都会被打乱。,
+New game/randomizer,bottom_screen.c,Coins & star pieces,金币与星之碎片,专有名词“星之碎片”待校对
+New game/randomizer,bottom_screen.c,Coins and star pieces lying around are shuffled too.,场景中的金币和星之碎片也会被随机分配。,
+New game/randomizer,bottom_screen.c,Key items,主要物品,
+New game/randomizer,bottom_screen.c,"Key items move too, always somewhere you can reach before you need them.",主要物品也会被重新分配，但一定能在需要之前取得。,
+New game/randomizer,bottom_screen.c,Shops,商店,
+New game/randomizer,bottom_screen.c,"Shops sell items from the world, and the world holds the shops' stock.",商店出售的物品会被重新分配，世界中的商店库存也会随之变化。,
+New game/randomizer,bottom_screen.c,Gifts,礼物,
+New game/randomizer,bottom_screen.c,What characters give you is shuffled too.,角色送的物品也会被随机分配。,
+New game/randomizer,bottom_screen.c,Keys in hidden spots,隐藏地点中的主要物品,
+New game/randomizer,bottom_screen.c,Key items can also hide in hidden panels and blocks.,主要物品也可能藏在隐藏面板和隐藏砖块中。,
+New game/randomizer,bottom_screen.c,Seed,种子,随机化种子
+New game/randomizer,bottom_screen.c,Random,随机,
+New game/randomizer,bottom_screen.c,START or A: begin. B: back.,按 START 或 A 开始。按 B 返回。,
+New game/randomizer,bottom_screen.c,Start,开始,
+Update,bottom_screen.c,Update available,发现可用更新,
+Update,bottom_screen.c,You have v,当前：v,后接版本号
+Update,bottom_screen.c,Get it on GitHub:,前往 GitHub 获取：,
+Update,bottom_screen.c,FBI can install it from the,可使用 FBI 扫描该页面上的,句子下一行接“二维码安装。”；FBI 是安装工具名
+Update,bottom_screen.c,QR code on that page.,二维码安装。,与上一行合并后更自然
+Update,bottom_screen.c,OK,确定,
+Save import,bottom_screen.c,Save imported,存档已导入,
+Save import,bottom_screen.c,N64 save (now named import.*.done).,N64 存档（已重命名为 import.*.done）。,文件名必须保留英文原样
+Save import,bottom_screen.c,Your previous saves were kept as,原有存档已另存为：,后面代码会追加文件名
+Save import,bottom_screen.c,Save not imported,存档未能导入,
+Save import,bottom_screen.c,The import file holds no Paper Mario,导入文件不包含此程序可读取的,
+Save import,bottom_screen.c,save this version can read. It was,纸片马力欧存档，文件已,游戏标题术语待校对；与上一行连读
+Save import,bottom_screen.c,renamed to import.*.bad.,重命名为 import.*.bad。,文件名必须保留英文原样
+Save import,bottom_screen.c,Your saves were not changed.,现有存档未作更改。,
+Startup/loading,bottom_screen.c,- Demo -,-演示模式-,
+Startup/loading,bottom_screen.c,Press START to play,按 START 开始游戏,
+Startup/loading,bottom_screen.c,Loading game data,正在加载游戏数据,
+Startup/loading,pm3ds_rom.c,Copying the ROM from your PC,正在从电脑复制 ROM,开发调试模式提示
+ROM error,pm3ds_rom.c,Wrong file size,ROM 文件大小不正确,
+ROM error,pm3ds_rom.c,No ROM found,未找到 ROM,
+ROM error,pm3ds_rom.c,Not an N64 ROM,这不是 N64 ROM,
+ROM error,pm3ds_rom.c,This is not the right ROM,ROM 不正确,
+ROM error,pm3ds_rom.c,Could not read the file,无法读取文件,
+ROM error,pm3ds_rom.c,Put your own Paper Mario ROM,请将你自己的纸片马力欧ROM,游戏标题术语待校对
+ROM error,pm3ds_rom.c,"(USA, Europe or iQue China) on SD",（美、欧或神游中文）放到 SD 卡中,
+ROM error,pm3ds_rom.c,in any searched ROM folder,放入任一 ROM 目录,"ROM loader and universal launcher both scan PM3DS_ROM_DIRS, not only /3ds/StarHaven."
+ROM error,pm3ds_rom.c,"(.z64, .n64 or .v64)",（支持 .z64、.n64 或 .v64 格式）,
+ROM error,pm3ds_rom.c,Press START to exit,按 START 退出,
+Controls names,pm3ds_settings.c,Start,Start,建议界面按钮名统一保留 START
+Controls names,pm3ds_settings.c,D-Up,D-Up,
+Controls names,pm3ds_settings.c,D-Down,D-Down,
+Controls names,pm3ds_settings.c,D-Left,D-Left,
+Controls names,pm3ds_settings.c,D-Right,D-Right,
+Controls names,pm3ds_settings.c,C-Up,C-Up,3DS 对应输入映射，需确认是否需要解释
+Controls names,pm3ds_settings.c,C-Down,C-Down,
+Controls names,pm3ds_settings.c,C-Left,C-Left,
+Controls names,pm3ds_settings.c,C-Right,C-Right,
+HUD partner name,hud_info.c,Goombario,酷栗欧,专有名词：请提供/确认神游版名字
+HUD partner name,hud_info.c,Kooper,卡米龟,专有名词：请提供/确认神游版名字
+HUD partner name,hud_info.c,Bombette,炸弹妞,专有名词：请提供/确认神游版名字
+HUD partner name,hud_info.c,Parakarry,帕瑞塔,专有名词：请提供/确认神游版名字
+HUD partner name,hud_info.c,Bow,咻咻,专有名词：请提供/确认神游版名字
+HUD partner name,hud_info.c,Watt,霹雳小妞,专有名词：请提供/确认神游版名字
+HUD partner name,hud_info.c,Sushie,苏莎阿姨,专有名词：请提供/确认神游版名字
+HUD partner name,hud_info.c,Lakilester,朱库比,专有名词：请提供/确认神游版名字
+HUD partner name,hud_info.c,Goompa,酷栗爷爷,专有名词：请提供/确认神游版名字
+HUD partner name,hud_info.c,Goombaria,酷栗妹妹,专有名词：请提供/确认神游版名字
+HUD partner name,hud_info.c,Twink,汀克,专有名词：请提供/确认神游版名字
+HUD area name,hud_info.c,Goomba Region,栗子区域,专有名词/地名待校对
+HUD area name,hud_info.c,Toad Town,蘑菇镇,专有名词/地名待校对
+HUD area name,hud_info.c,Toad Town Tunnels,蘑菇镇地道,专有名词/地名待校对
+HUD area name,hud_info.c,Inside the Whale,鲸鱼体内,
+HUD area name,hud_info.c,Peach's Castle,桃花公主城堡,专有名词待校对
+HUD area name,hud_info.c,Star Region,星星区域,专有名词/地名待校对
+HUD area name,hud_info.c,Koopa Region,喏库区域,专有名词/地名待校对
+HUD area name,hud_info.c,Koopa Bros. Fortress,喏库兄弟要塞,专有名词/地名待校对
+HUD area name,hud_info.c,Mt. Rugged,乱石山,专有名词/地名待校对
+HUD area name,hud_info.c,Dry Dry Outpost,干旱村落,专有名词/地名待校对
+HUD area name,hud_info.c,Dry Dry Desert,干旱沙漠,专有名词/地名待校对
+HUD area name,hud_info.c,Dry Dry Ruins,干旱废墟,专有名词/地名待校对
+HUD area name,hud_info.c,Forever Forest,迷失森林,专有名词/地名待校对
+HUD area name,hud_info.c,Boo's Mansion,嘘嘘鬼大厦,专有名词/地名待校对
+HUD area name,hud_info.c,Gusty Gulch,风啸谷,专有名词/地名待校对
+HUD area name,hud_info.c,Tubba Blubba's Castle,图巴・布路巴城堡,专有名词待校对
+HUD area name,hud_info.c,Shy Guy's Toy Box,嘿虎的玩具盒,专有名词/地名待校对
+HUD area name,hud_info.c,Lavalava Island,火山岛,专有名词/地名待校对
+HUD area name,hud_info.c,Mt. Lavalava,火山,专有名词/地名待校对
+HUD area name,hud_info.c,Flower Fields,鲜花原野,专有名词/地名待校对
+HUD area name,hud_info.c,Shiver Region,酷冰冰区域,专有名词/地名待校对
+HUD area name,hud_info.c,Crystal Palace,水晶宫殿,专有名词/地名待校对
+HUD area name,hud_info.c,Bowser's Castle,酷霸王城堡,专有名词待校对
+HUD area name,hud_info.c,Peach's Castle Grounds,桃花公主城堡庭园,专有名词待校对
+HUD area name,hud_info.c,The End,剧终,
+HUD area name,hud_info.c,Playroom,游戏室,
+HUD area name,hud_info.c,Game Over,游戏结束,
+HUD area name,hud_info.c,Test Area,测试区域,开发测试地图，一般玩家不常见
+HUD area name,hud_info.c,Mario's House,马力欧的家,官方人名风格待确认
+Stats and found,bottom_screen.c,Randomizer seed %08X,随机模式种子：%08X,%08X 是运行时格式占位符，必须原样保留
+Stats and found,bottom_screen.c,This room: %d of %d still here,本房间仍有 %d/%d 未收集,两个 %d 均需保留
+Stats and found,bottom_screen.c,Checked %d/%d,已收集 %d/%d,两个 %d 均需保留；当前代码该字段表示已找到数/总数
+Options,bottom_screen.c,30 fps,30 fps,数值与单位可按界面宽度调整
+Options,bottom_screen.c,60 fps,60 fps,数值与单位可按界面宽度调整
+New game/randomizer,bottom_screen.c,A seed is up to 8 characters: 0-9 and A-F.,种子最多 8 位，只能使用 0-9 和 A-F。,系统输入框提示；字符范围不可改
+New game/randomizer,bottom_screen.c,"Seed (0-9, A-F)",种子（0-9、A-F）,系统输入框提示；字符范围不可改
+Update,bottom_screen.c,Skip v%d.%d.%d,跳过 v%d.%d.%d,三处版本号占位符必须保留
+ROM error,pm3ds_rom.c,Not enough memory,内存不足,
+ROM error,pm3ds_rom.c,Damaged install,安装文件损坏,
+ROM error,pm3ds_rom.c,reinstall the game,请重新安装游戏,
+ROM error,pm3ds_rom.c,Could not open the ROM,无法打开 ROM,
+ROM error,pm3ds_rom.c,not enough memory?,内存不足？,原文包含问号，建议润色
+Controls names,pm3ds_settings.c,SELECT,SELECT,实体按键标识建议保留英文大写
+Controls names,pm3ds_settings.c,START,START,实体按键标识建议保留英文大写
+Controls names,pm3ds_settings.c,A,A,实体按键标识保留
+Controls names,pm3ds_settings.c,B,B,实体按键标识保留
+Controls names,pm3ds_settings.c,X,X,实体按键标识保留
+Controls names,pm3ds_settings.c,Y,Y,实体按键标识保留
+Controls names,pm3ds_settings.c,L,L,实体按键标识保留
+Controls names,pm3ds_settings.c,R,R,实体按键标识保留
+Controls names,pm3ds_settings.c,ZL,ZL,实体按键标识保留
+Controls names,pm3ds_settings.c,ZR,ZR,实体按键标识保留
+Controls names,pm3ds_settings.c,Z,Z,游戏内 N64 Z 键映射标识，建议保留
+Controls names,pm3ds_settings.c,-,-,未绑定状态
+HUD partner name,hud_info.c,-,-,无同伴时的占位符
+Party,bottom_screen.c,%s is with you,同行同伴：%s,%s 是运行时同伴名字；保留格式占位符。页面宽度不足时可缩短为“同伴：%s”。
+Tattle,bottom_screen.c,%d of %d enemies,已扫描 %d/%d 个敌人,两个 %d 都要保留；语义是已掌握资料数/敌人总数。
+Found,bottom_screen.c,%d of %d item spots,已收集 %d/%d 个物品,两个 %d 都要保留；当前计数代表已收集/总数。
+Options,pm3ds_lang_table.inc,Tap a value to change it,点击数值即可更改,选项页说明。
+New game/randomizer,bottom_screen.c,"A: type a seed, Y: random. Same seed and settings, same game.",A：输入种子，Y：随机。相同种子和设置会生成相同的游戏。,按钮字母 A/Y 应保留；句子可能需要拆分/缩小字号。
+New game/randomizer,bottom_screen.c,The original,原作,源码中的独立一行。
+New game/randomizer,bottom_screen.c,adventure,冒险,源码中的独立一行；和 “The original” 分开绘制。
+Controls,bottom_screen.c,Swap,交换,控制映射页用于交换两个动作的按钮。
+Controls,bottom_screen.c,Options,选项,随机模式设置界面中的入口标签，视版面也可译为“设置”。
+Battle touch UI,bottom_screen.c,HP %d/%d,HP %d/%d,建议先保留游戏内常见缩写，确认是否沿用神游版 UI 用语；两个 %d 不可改。
+Battle touch UI,bottom_screen.c,HP ?,HP ?,状态未知时显示，保留问号。
+Battle touch UI,bottom_screen.c,%d FP,%d FP,保留缩写 FP；需校对神游版专有名词。
+Battle touch UI,bottom_screen.c,%d SP,%d SP,保留缩写 SP；需校对神游版专有名词。
+Battle touch UI,bottom_screen.c,%d sp,%d SP,源码中大小写为小写 sp，建议统一成大写 SP；占位符保留。
+HUD partner name,bottom_screen.c,???,？？？,未获得同伴时的占位符。
+Battle touch UI,bottom_screen.c,HP,HP,战斗触控 HUD 缩写；建议与原版/神游版术语保持一致。
+Battle touch UI,bottom_screen.c,FP,FP,Flower Points 的游戏缩写；是否译为“花朵点数”等请校对。
+Update,bottom_screen.c, v%d.%d.%d is out.,发现更新 v%d.%d.%d。,源码前面会拼接 Star Haven 应用名；三个 %d 必须保留。前导空格是原始拼接格式的一部分。
+Tracker area name,journal.c,Tubba's Castle,图巴城堡,按用户指定统一译为图巴城堡；实际用于收集/追踪列表的源码键。
+Tracker area name,journal.c,Castle Grounds,城堡庭园,实际用于追踪列表的名称；不同于 HUD 中 Peach’s Castle Grounds。
+ROM error,pm3ds_rom.c,"game ID %.4s, expected %s",游戏 ID %.4s，应为%s,动态格式串；必须保留两个 printf 格式占位符。
+ROM error,pm3ds_rom.c,the blank iQue game-ID field,神游 iQue 的空白游戏 ID,用于“错误 ROM”详情中动态说明 iQue ROM 的空白游戏 ID 字段。
+Bottom-screen menus,bottom_screen.c,Recipes,食谱,新增食谱页标题。
+Bottom-screen menus,bottom_screen.c,Cheats,金手指,新增作弊页标题与新游戏选项。
+Recipes,bottom_screen.c,%d of %d cooked,已制作 %d/%d 道料理,保留两个整数格式占位符。
+Recipes,bottom_screen.c,Show all,显示全部,显示所有料理名称。
+Recipes,bottom_screen.c,Hide new,隐藏未制作,切回仅显示已制作料理名称。
+Recipes,bottom_screen.c,Cooked,已制作,料理详情状态。
+Recipes,bottom_screen.c,Not cooked yet,尚未制作,料理详情状态。
+Recipes,bottom_screen.c,How to cook it,制作方法,料理详情说明标题。
+Recipes,bottom_screen.c,Anything that doesn't go together,无法搭配,无可行制作方式时显示。
+Recipes,bottom_screen.c,Mixing two needs the Cookbook,两种物品一起制作需要食谱,料理组合提示。
+Recipes,bottom_screen.c,by luck,靠运气,料理方式说明。
+Recipes,bottom_screen.c,with the Cookbook,使用料理书,料理方式说明。
+Recipes,bottom_screen.c,on its own,单独制作,料理方式说明。
+Cheats,bottom_screen.c,Infinite HP,HP无限,作弊选项。
+Cheats,bottom_screen.c,Infinite FP,FP无限,作弊选项。
+Cheats,bottom_screen.c,Infinite Star Power,星之能量无限,作弊选项。
+Cheats,bottom_screen.c,999 coins,999金币,作弊选项。
+Cheats,bottom_screen.c,Unlimited BP,BP不限,作弊选项。
+Cheats,bottom_screen.c,Stays full,保持全满,作弊选项说明。
+Cheats,bottom_screen.c,Stays at 999,保持999,作弊选项说明。
+Cheats,bottom_screen.c,Any badges fit,可装备所有徽章,作弊选项说明。
+Cheats,bottom_screen.c,Tap one to switch it,点击即可切换,作弊页面副标题。
+Cheats,pm3ds_lang_table.inc,Saved with this file.,与此存档一同保存。,作弊设置存档说明。
+New game,pm3ds_lang_table.inc,Can't add later,之后不能更改,新游戏时的作弊设置提示。
+New game,pm3ds_lang_table.inc,A: choose  Y: cheats,A：选择  Y：金手指,新游戏控制提示。
+Settings,bottom_screen.c,Language,语言,iQue 固定中文；该选项仅供非 iQue 版本显示
+Settings,bottom_screen.c,Battle HP/FP bar,战斗 HP/FP 状态条,
+Settings,bottom_screen.c,Ice Power effect,寒冰勋章效果,
+Startup,bottom_screen.c,Low memory start: close and reopen the game,内存不足，无法启动：请关闭并重新打开游戏,
+Controls,pm3ds_settings.c,Turbo A,连发 A,手柄按键设置名称
+Update,bottom_screen.c,%s v%d.%d.%d is out.,%s v%d.%d.%d 已发布。,保留全部格式占位符
+Update,bottom_screen.c,You have v%s.,当前为 v%s。,保留格式占位符
+Save import,bottom_screen.c,%d save file converted from your,已从你的 N64 存档转换 %d 个文件,保留格式占位符
+Save import,bottom_screen.c,%d save files converted from your,已从你的 N64 存档转换 %d 个文件,保留格式占位符
+Settings,bottom_screen.c,Display,显示,
+Settings,bottom_screen.c,Gameplay,游戏,
+Settings,bottom_screen.c,System,系统,
+Settings,bottom_screen.c,"Drag to scroll, tap to change",拖动滚动，点击修改,
+Found,bottom_screen.c,Tap an area: where things are,点击地区查看物品位置,
+Found,bottom_screen.c,%d of %d found,已找到 %d/%d,保留格式占位符
+Found,bottom_screen.c,This room first,优先显示此房间,
+Found,bottom_screen.c,this room,此房间,
+Found,bottom_screen.c,"%s, room %d",%s，第 %d 房间,保留格式占位符
+Found,bottom_screen.c,On the ground,地面上,
+Found,bottom_screen.c,Block,砖块,
+Found,bottom_screen.c,Hidden block,隐藏砖块,
+Found,bottom_screen.c,Hidden panel,隐藏面板,
+Found,bottom_screen.c,Tree,树木,
+Found,bottom_screen.c,Bush,灌木,
+Found,bottom_screen.c,Chest,宝箱,
+Found,bottom_screen.c,Crate,木箱,
+Found,bottom_screen.c,Super Block,超级砖块,
+Found,bottom_screen.c,Coin,金币,
+Randomizer,bottom_screen.c,Enemies,敌人,
+Randomizer,bottom_screen.c,Every enemy group fights as another group from the same chapter.,敌人组合战斗时成为同章节的另一组敌人。,
+Badges,bottom_screen.c,BP left: %d of %d,剩余 BP：%d/%d,保留格式占位符
+Badges,bottom_screen.c,No badges yet.,还没有勋章。,
+Badges,bottom_screen.c,Badges change outside battles and menus.,只能在战斗和菜单之外更换勋章。,
+Badges,bottom_screen.c,Not enough BP.,BP 不足。,
+Badges,bottom_screen.c,Too many badges on.,装备的勋章太多。,
+Quit,bottom_screen.c,Quit game,退出游戏,
+Quit,bottom_screen.c,Quit to the title screen?,要返回标题画面吗？,
+Quit,bottom_screen.c,Save and quit,保存并退出,
+Quit,bottom_screen.c,Quit without saving,不保存并退出,
+Quit,bottom_screen.c,Cancel,取消,
+Quit,bottom_screen.c,Can't save right now.,现在无法保存。,
+New game,bottom_screen.c,Hard mode,困难模式,
+New game,pm3ds_lang_table.inc,Y: cheats  X: hard mode,Y：金手指  X：困难模式,
+New game,bottom_screen.c,Hard,困难,
+Badges,bottom_screen.c,Loadouts,配置组合,
+Badges,bottom_screen.c,Save to...,保存到……,
+Badges,bottom_screen.c,Loadout %d saved: %d badges,配置 %d 已保存：%d 个勋章,保留格式占位符
+Badges,bottom_screen.c,Loadout %d is empty: tap Save first,配置 %d 为空：请先点击保存,保留格式占位符
+Badges,bottom_screen.c,Loadout %d on (%d didn't fit),已启用配置 %d（%d 个勋章无法装入）,保留格式占位符
+Badges,bottom_screen.c,Loadout %d on,已启用配置 %d,保留格式占位符
+Settings,bottom_screen.c,Colors,色彩模式,
+Settings,bottom_screen.c,Vivid,鲜艳,
+Settings,bottom_screen.c,Deuteranopia,绿色弱视模式,色觉辅助模式名称
+Settings,bottom_screen.c,Protanopia,红色弱视模式,色觉辅助模式名称
+Settings,bottom_screen.c,Tritanopia,蓝黄色弱视模式,色觉辅助模式名称
+Controls,bottom_screen.c,D-pad in menus,菜单方向键,“十字键”中的“字”不在神游字体映射中；使用等义且可显示的“方向键”。
+Controls,bottom_screen.c,Cursor,光标,
+Controls,bottom_screen.c,C buttons,C 键,
+Badges,bottom_screen.c,Badge costs,勋章消耗,
+Badges,bottom_screen.c,Badges swap their BP and FP costs. Speedy Spin stays.,交换勋章的 BP 和 FP 消耗。急速旋转勋章保持不变。,
+New game,bottom_screen.c,Skip intro,跳过序章,
+New game,bottom_screen.c,Y: cheats  X: hard  R: skip,Y：金手指  X：困难模式  R：跳过序章,
+Settings,bottom_screen.c,Autosave,自动保存,
+Settings,bottom_screen.c,Each area,每个区域,
+Settings,bottom_screen.c,5 min,5 分钟,
+Settings,bottom_screen.c,10 min,10 分钟,
+Settings,bottom_screen.c,15 min,15 分钟,
+Badges,pm3ds_lang_table.inc,Tap a badge to put it on or take it off.,点选勋章，装备或取消装备。,上游语言表中的徽章操作说明。
+Cheats,bottom_screen.c,No level-up limits,升级无上限,作弊选项名称。
+Cheats,bottom_screen.c,Free QoL badges,便利性徽章免费,QoL 指 Quality of Life。
+Cheats,bottom_screen.c,"Up to 95 HP, FP, 99 BP",HP、FP：95，BP：99,作弊说明。
+Cheats,bottom_screen.c,"Speedy Spin, I Spy...",急速旋转、测星勋章……,作弊说明；徽章名称需与游戏译名保持一致。
+Give,bottom_screen.c,Max HP +5,最大 HP +5,奖励项目。
+Give,bottom_screen.c,Max FP +5,最大 FP +5,奖励项目。
+Give,bottom_screen.c,Max BP +3,最大 BP +3,奖励项目。
+Give,bottom_screen.c,Level +1,等级 +1,奖励项目。
+Give,bottom_screen.c,Boots & hammer +1,靴子和锤子 +1,奖励项目。
+Give,bottom_screen.c,Star Pieces +10,星之碎片 +10,奖励项目。
+Give,bottom_screen.c,Give,奖励,给当前存档添加奖励。
+Give,bottom_screen.c,Tap to add to this file,点击即可加入此存档,奖励页说明。
+Give,bottom_screen.c,Switches,切换项目,返回作弊开关列表的按钮。
+Settings,bottom_screen.c,Check at launch,启动时检查,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+Settings,bottom_screen.c,Check for updates,检查更新,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+Settings,bottom_screen.c,Check,检查,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+Settings,bottom_screen.c,Checking...,检查中...,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+Settings,bottom_screen.c,Up to date,已是最新版本,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+Settings,bottom_screen.c,No Wi-Fi,无 Wi-Fi,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+Settings,bottom_screen.c,No answer,无响应,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+Sound,bottom_screen.c,Music,音乐,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+Sound,bottom_screen.c,Sound effects,音效,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+Sound,bottom_screen.c,Jukebox,点唱机,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+Sound,bottom_screen.c,Sound,声音,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+Sound,bottom_screen.c,Plays instead of the area's music,代替本区域的音乐播放,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+Sound,bottom_screen.c,Play,播放,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+Settings,bottom_screen.c,Steerable spin,旋转可转向,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+Settings,bottom_screen.c,Steerable jump,跳跃可转向,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+Cheats,bottom_screen.c,Levels past 27,等级超过27,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+Cheats,bottom_screen.c,"To 99, 1+ SP a fight",最高99级，每战至少1 SP,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+Cheats,bottom_screen.c,Action commands,动作指令,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+Cheats,bottom_screen.c,From now on,从现在开始,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+File menu,bottom_screen.c,Game language,游戏语言,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+File menu,bottom_screen.c,Tap or press START,点击或按 START,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+File menu,bottom_screen.c,Choose a file,选择存档,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+File menu,bottom_screen.c,Choose a file to delete,选择要删除的存档,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+File menu,bottom_screen.c,Copy which file?,复制哪个存档？,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+File menu,bottom_screen.c,Copy to which file?,复制到哪个存档？,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+File menu,bottom_screen.c,New file,新存档,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+File menu,bottom_screen.c,Delete,删除,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+File menu,bottom_screen.c,Copy,复制,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+File menu,bottom_screen.c,Start this file?,开始这个存档？,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+File menu,bottom_screen.c,Delete this file?,删除这个存档？,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+File menu,bottom_screen.c,Use this name?,使用这个名字？,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+File menu,bottom_screen.c,Copy over this file?,覆盖这个存档？,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+File menu,bottom_screen.c,Yes,是,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+File menu,bottom_screen.c,No,否,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+File menu,bottom_screen.c,File deleted,存档已删除,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+File menu,bottom_screen.c,File copied,存档已复制,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+File menu,bottom_screen.c,File created,存档已创建,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+File menu,bottom_screen.c,Enter a file name!,请输入存档名！,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+File menu,bottom_screen.c,Space,空格,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+New game,bottom_screen.c,Y:cheats X:hard R:skip L:99,Y:金手指 X:困难 R:跳过 L:99,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+New game,bottom_screen.c,Level 99,99级,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+New game,bottom_screen.c,Lv 99,Lv 99,"Star Haven 1.3.10+ string, drafted by the maintainer: please review"
+Settings,bottom_screen.c,Game text,游戏文本,"Star Haven 1.3.11 string (language packs, GitHub #84), drafted by the maintainer: please review"
+Settings,bottom_screen.c,Not found,未找到,"Star Haven 1.3.11 string (language packs, GitHub #84), drafted by the maintainer: please review"

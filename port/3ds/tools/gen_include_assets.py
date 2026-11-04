@@ -165,6 +165,10 @@ def main():
         manifest.append(("RAW", path, a, b - a))
     for path in ("charset/kana.dat", "charset/kanji.dat", "charset/latin.dat", "charset/menu_kana.dat",
                  "charset/menu_latin.dat", "charset/buttons.dat"):
+        # the JP fonts the sources name in every version: a placeholder where this
+        # ROM has none, never over JP's real ones (fix from Darth-Koopa's fork)
+        if path in charset:
+            continue
         dst = os.path.join(OUT, "raw", path)
         os.makedirs(os.path.dirname(dst), exist_ok=True)
         with open(dst, "wb") as fh:

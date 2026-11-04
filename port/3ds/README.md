@@ -28,7 +28,8 @@ The name, icon and banner are the port's own (`include/pm3ds_brand.h`, `tools/ma
 | Saves | `source/n64_shim/os_flash.c` | `sdmc:/3ds/StarHaven/save.fla` (128 KB, write-through; the old `/3ds/PaperMario3DS` folder is moved on first boot) |
 | Big-endian data | `audio_endian.c`, `src/collision.c` (`hit_fix_endian`), `m10_shape_reloc.c`, `m10_texheader_endian.c`, … | ROM data is byte-swapped where it is loaded |
 | Bottom screen | `source/platform/bottom_screen.c`, `source/n64_shim/hud_info.c`, `touch_menu.c`, `journal.c` | tabs Stats (with a quick-save button), Map, Party, Tattle (every enemy tattled, with its tattle) and Found (collected item spots per area, from the randomizer's location table); battle menus as buttons. Quick save goes through `src/world/menus.c`: allowed whenever the pause menu could open, saved like a save block |
-| Update notice | `source/platform/pm3ds_update.c` | at launch, one request to `github.com/<repo>/releases/latest` (its redirect names the newest tag); a newer version shows a notice on the bottom screen. Options → Update check turns it off |
+| Update notice | `source/platform/pm3ds_update.c` | at launch, one request to `github.com/<repo>/releases/latest` (its redirect names the newest tag); a newer version shows a notice on the bottom screen. Options → Check at launch turns it off, Options → Check for updates asks again in game |
+| Language packs | `source/n64_shim/langpack.c`, `tools/make_langpack.py` | a translation's messages from `sdmc:/3ds/StarHaven/lang/<id>/messages.bin`; `src/msg.c` `dma_load_msg` asks it first (US message ids, the EU ROM's two differing sections mapped back). Guide: `docs/language_packs.md` |
 | Debug probes | `source/n64_shim/m13_debug.c` | GAMESTAT / HPSTAT / MEMSTAT / PERF log lines, map sweep, teleport, collision checks |
 
 Decomp sources are edited in place under `#ifdef _3DS` / `PM3DS_*` guards only.

@@ -85,8 +85,15 @@ The tabs run down the left side:
   bottom, Strategies, Items and Star Spirits above them. Every list shows each entry's icon.
   To choose a target, tap the enemy in the picture of the stage (each one has a number) or its
   numbered tile, which shows its HP once Goombario has tattled it.
+- **Title and file screens**: tap the card on the title to start, and on the EU ROM **Game language**
+  for the game's own language. The bottom screen then shows your four files with Delete, Copy and
+  Back, the Yes/No prompts and a keyboard for the file name. The buttons still work too.
 - **Fast >>** turns fast-forward on and off.
 - **Options** (with its own tabs: Settings, Controls, Cheats on a cheat file, Debug):
+  - **Language**: the bottom screen's own text in English, Deutsch, Français, Español, Italiano,
+    日本語 or 简体中文 (Simplified Chinese).
+  - **Game text**: *Original* (your ROM's) or a language pack on the SD card, a fan translation
+    of the game's text (see Language packs below).
   - **Screen**: *Original* (4:3), *Fill* or *Wide*.
   - **3D depth**: how deep the 3D slider goes, from *Low* to *Deepest*.
   - **Frame rate**: 60 fps (in-between frames are added) or the original 30 fps. With the 3D
@@ -99,8 +106,10 @@ The tabs run down the left side:
   - **Music** and **Sound effects**: switch either off (sound effects includes the areas'
     background sounds).
   - **Jukebox**: pick a song that plays instead of the area's music. Battles keep their own.
-  - **Update check**: when Star Haven starts, it asks GitHub whether a newer version is out
-    and, if so, says so on the bottom screen (*Skip* stops it mentioning that version). It
+  - **Check for updates**: asks GitHub now whether a newer version is out, and shows the answer
+    on the row.
+  - **Check at launch**: the same question when Star Haven starts. A newer version shows a
+    notice on the bottom screen (*Skip* stops the launch check mentioning that version). It
     downloads and installs nothing. Off here, from the next start.
   - **Controls** tab: remap any button.
 
@@ -135,6 +144,13 @@ and action commands from the moment you switch it on. The switches
 are saved with the file. This is only chosen when the file is made: a file started with the
 switch off never shows cheats and can't turn them on later.
 
+## Level 99
+
+The new-file screen also has a **Level 99** switch (L, or tap it): that file levels up as far as
+99 like in The Thousand-Year Door, with up to 95 HP, 95 FP and 99 BP, and a won fight is always
+worth at least 1 star point. No cheats involved, and the rest of the game is as usual. It works
+with Classic, Randomizer and Hard mode, and is only chosen when the file is made.
+
 ## Bringing an N64 save
 
 Saves from an N64 emulator (Project64, RetroArch/mupen64plus, ares), a flashcart or a
@@ -155,6 +171,18 @@ Saves from **Paperboat** (the PC port) carry over with the same page, both ways:
 `file0.json` to `file3.json` there to get a `save_us.fla`, or your `save_us.fla` to get them
 back. Paperboat is the US version, so this goes with the US ROM.
 
+## Language packs
+
+A language pack is a fan translation of the game's text. Put its folder in `/3ds/StarHaven/lang/`
+(e.g. `/3ds/StarHaven/lang/ca/messages.bin`) and pick it in Settings > **Game text**. It works with
+the US and the EU ROM; on the EU ROM, set the game language to English. For now packs change the
+messages (dialogue, items, tattles, menus written as messages); the file select's and pause menu's
+own words, and words drawn into pictures (title, chapter cards), stay your ROM's. Messages a pack
+lacks are your ROM's too.
+
+Translators: [`docs/language_packs.md`](https://github.com/SecondaryLifer/StarHaven/blob/main/port/3ds/docs/language_packs.md)
+explains how to make one from `.msg` files with `tools/make_langpack.py`.
+
 ## Files on the SD card (`/3ds/StarHaven/`)
 
 | File | |
@@ -166,6 +194,7 @@ back. Paperboat is the US version, so this goes with the US ROM.
 | `port.cfg` | settings |
 | `spoiler_<seed>.txt` | randomizer spoiler logs |
 | `log.txt` | warnings, useful in bug reports |
+| `lang/<name>/messages.bin` | language packs (Settings > Game text) |
 
 ## Help and bug reports
 
@@ -182,6 +211,9 @@ screen and your `log.txt` help a lot.
 
 - The 3D HOME Menu banner is by [Velvii](https://github.com/Velvii). Its title uses the Hey
   Gorgeous font, free for personal use.
+- The Simplified Chinese bottom screen is translated by [Darth-Koopa](https://github.com/Darth-Koopa),
+  who also worked out the iQue version's support. Its characters are from
+  [Fusion Pixel](https://github.com/TakWolf/fusion-pixel-font) by TakWolf (SIL Open Font License 1.1).
 - Star Haven itself is by SecondaryLifer.
 
 ## Legal

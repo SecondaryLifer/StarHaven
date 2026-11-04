@@ -112,7 +112,11 @@ void pm3ds_qs_step(void) {
         }
     }
     // the camera jumps along, as after a pipe or door, instead of gliding over from the
-    // entrance (Discord: reloading a save by the Windy Mill)
+    // entrance (Discord: reloading a save by the Windy Mill). Its target follows Mario only
+    // in the player's physics, later in the step than the camera can update, so a reinit
+    // alone settled on the entrance and the camera still glided over (still so in 1.3.5):
+    // the target moves with him here.
+    gCameras[CAM_DEFAULT].targetPos = ps->pos;
     gCameras[CAM_DEFAULT].needsReinit = true;
     {
         extern void pm3ds_log(int, const char*, ...);

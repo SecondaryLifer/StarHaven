@@ -12,6 +12,9 @@
 s32 msg_get_print_char_width(s32 character, s32 charset, s32 variation, f32 msgScale, s32 overrideCharWidth, u8 flags);
 void msg_get_glyph(s32 font, s32 variation, s32 charIndex, s32 palette, MesasgeFontGlyphData* out);
 void dma_load_msg(u32 msgID, void* dest);
+#ifdef _3DS
+#include "pm3ds_langpack.h"
+#endif
 
 BSS CreditsData N(CreditsData);
 BSS CreditsData* N(CreditsDataPtr);
@@ -779,6 +782,11 @@ void N(credits_load_message)(CreditsEntry* entry) {
     line = &N(CreditsDataPtr)->lines[i];
     if (entry->msgID != MSG_NONE) {
         if (MSG_IS_ID(entry->msgID)) {
+#ifdef _3DS
+            // a language pack's line, cut to this buffer (port/3ds/source/n64_shim/langpack.c)
+            if (!pm3ds_langpack_msg(entry->msgID, N(CreditsMessageBuffers)[N(CreditsBufferIndex)],
+                                    sizeof(N(CreditsMessageBuffers)[0])))
+#endif
             dma_load_msg(entry->msgID, N(CreditsMessageBuffers)[N(CreditsBufferIndex)]);
             line->message = N(CreditsMessageBuffers)[N(CreditsBufferIndex)];
             N(CreditsBufferIndex)++;

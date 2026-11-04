@@ -32,9 +32,19 @@ typedef struct {
 
 void pm3ds_hud_query(pm3ds_hud_info_t *out);
 
+/* names from the game's messages, in the UI encoding (pm3ds_lang.h): the iQue
+ * ROM's are Chinese, 4 bytes a character */
+#if VERSION_IQUE
+#define PM3DS_UI_NAME 64
+#define PM3DS_UI_DESC 512
+#else
+#define PM3DS_UI_NAME 24
+#define PM3DS_UI_DESC 192
+#endif
+
 /* Tattle log (n64_shim/journal.c): enemies Goombario has tattled, in actor order */
 #define PM3DS_TATTLE_MAX  160
-#define PM3DS_TATTLE_NAME 24
+#define PM3DS_TATTLE_NAME PM3DS_UI_NAME
 typedef struct {
     int known, total;                     /* tattled / enemies with a tattle */
     short entry[PM3DS_TATTLE_MAX];        /* for pm3ds_tattle_text */
@@ -65,7 +75,7 @@ int pm3ds_tracker_query(pm3ds_tracker_t *out);
 typedef struct {
     int count;
     struct {
-        char item[24];                        /* what lies there now (the randomizer's item in a seed) */
+        char item[PM3DS_UI_NAME];             /* what lies there now (the randomizer's item in a seed) */
         const void *icon;                     /* HudScript, or NULL */
         unsigned char src;                    /* PM3DS_SPOT_* */
         unsigned char found, here;            /* taken; in Mario's room */
@@ -78,7 +88,7 @@ int pm3ds_tracker_spots(int area, pm3ds_tracker_spots_t *out);
 
 /* Recipes (n64_shim/journal.c): every dish Tayce T. can cook, by name */
 #define PM3DS_RECIPE_MAX  56
-#define PM3DS_RECIPE_NAME 24
+#define PM3DS_RECIPE_NAME PM3DS_UI_NAME
 typedef struct {
     int count, cooked;
     short item[PM3DS_RECIPE_MAX];                 /* for pm3ds_recipe_detail */
@@ -91,7 +101,7 @@ int pm3ds_recipe_query(pm3ds_recipe_list_t *out);
 /* Badges (n64_shim/journal.c): the badges Mario has, in the pause menu's order,
  * and switching one on or off from the bottom screen */
 #define PM3DS_BADGE_MAX  128
-#define PM3DS_BADGE_NAME 24
+#define PM3DS_BADGE_NAME PM3DS_UI_NAME
 typedef struct {
     int count, bp_max, bp_used;
     int can_change;                               /* in the world, no menu or battle open */
@@ -114,7 +124,7 @@ int pm3ds_badge_loadout_load(int n, int *skipped);   /* returns how many went on
 #define PM3DS_RECIPE_INGR  36
 typedef struct {
     int hp, fp;                                   /* eating it restores */
-    char desc[192];
+    char desc[PM3DS_UI_DESC];
     int ways;
     struct {
         short a, b;                               /* ingr[] indices; b -1: on its own */
