@@ -28,6 +28,7 @@ build.ninja
 !port/3ds/m11_syms.ld
 !port/3ds/m11_syms_us.ld
 !port/3ds/m11_syms_ique.ld
+!port/3ds/universal/universal.ld
 !src/map_shape.ld
 *.elf
 *.z64

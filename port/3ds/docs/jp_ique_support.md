@@ -124,13 +124,12 @@ Needs the iQue ROM as `ver/ique/baserom.z64` (SHA1
   - The EU/US program recognises the iQue dump (40 MB, blank name and game ID)
     and says it needs Star Haven iQue; the iQue program says the same about the
     US and EU ROMs.
-- Packaging: one copy of the game takes about 22 MB (text, data, bss), the
-  EU+US program 44 MB, and with the EU ROM about 5 MB is left: a third copy
-  doesn't fit. `PM3DS_VERSION=ique tools/package.sh` makes its own
-  `StarHaven_iQue.cia` / `.3dsx`: UniqueId `0x92B9A`, product code `CTR-H-STHQ`,
-  `cia/icon_ique.icn` ("Star Haven iQue"), so it installs beside
-  `StarHaven.cia`. romdata strips 3464 objects (data CRC32 `281426A5`); the
-  packaged 3dsx puts them back from the ROM and plays.
+- Packaging: one copy of the game takes about 22 MB (text, data, bss), and the
+  EU+US program held two side by side (44 MB). 1.3.12 shipped iQue as its own
+  app (`PM3DS_VERSION=ique tools/package.sh`: UniqueId `0x92B9A`, `CTR-H-STHQ`,
+  `cia/icon_ique.icn`). Since 1.3.13 the universal program holds all three:
+  their data and bss share one area (`universal/universal.ld`, loaded from
+  romfs by the starter), which brought three copies down to about 29 MB.
 - Not checked yet: the #72 reports against this build (the heart block in
   trd_06/trd_09 is off camera from the debug entries; which map the tree fight
   is in isn't known), hardware, the Old 3DS.

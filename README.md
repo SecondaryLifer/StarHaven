@@ -17,8 +17,8 @@ on the 3DS; nothing is emulated.
   <a href="https://youtu.be/P1md4pz01cY">▶ Watch Star Haven running on a 3DS</a>
 </p>
 
-**Star Haven contains no game data.** You need your own Paper Mario ROM (EU or US, or the
-iQue Player's Chinese release with `StarHaven_iQue.cia`).
+**Star Haven contains no game data.** You need your own Paper Mario ROM (EU, US, or the
+iQue Player's Chinese release).
 
 **Join the Star Haven 3DS Discord: [discord.gg/zHq9tH49Z](https://discord.gg/zHq9tH49Z)** for help,
 news about new versions and to report bugs. Bug reports here on GitHub are welcome too.
@@ -34,9 +34,6 @@ news about new versions and to report bugs. Bug reports here on GitHub are welco
 2. Copy your ROM into `/3ds/StarHaven/` on the SD card. Any file name works, and so do
    `.z64`, `.n64` and `.v64` dumps.
 3. Start Star Haven from the HOME menu.
-
-Got the iQue (Chinese) ROM? Install `StarHaven_iQue.cia` (or `.3dsx`) from
-[Releases](../../releases/latest) instead: it's its own app and installs next to the other one.
 
 Full instructions: [the player readme](port/3ds/RELEASE_README.md).
 

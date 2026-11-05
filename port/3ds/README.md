@@ -55,17 +55,19 @@ Everything builds in the `papermario-3ds-builder` Docker image (devkitARM + libc
 Output: `port/3ds/PaperMario3DS.3dsx` (+ `.elf`).
 
 The US build is the same with the US ROM at `ver/us/baserom.z64` and `PM3DS_VERSION=us` added
-to the make line (output `PaperMario3DS_us.3dsx`). With both built,
-`python3 /project/port/3ds/tools/universal.py` (in the image) links them into one program,
-`port/3ds/StarHaven_universal.elf`, which picks the copy that matches the ROM at boot.
+to the make line (output `PaperMario3DS_us.3dsx`). The iQue build (the iQue Player's Chinese
+release) too, with the iQue ROM at `ver/ique/baserom.z64`: split it
+(`tools/extract_assets.py ver/ique/baserom.z64`), run `tools/gen_version_headers.sh ique` and
+`PM3DS_VERSION=ique tools/gen_include_assets.py`, then make with `PM3DS_VERSION=ique` (output
+`PaperMario3DS_ique.3dsx`; details in `docs/jp_ique_support.md`).
 
-The iQue build (the iQue Player's Chinese release) is its own program: with the iQue ROM at
-`ver/ique/baserom.z64`, split it (`tools/extract_assets.py ver/ique/baserom.z64`), run
-`tools/gen_version_headers.sh ique` and `PM3DS_VERSION=ique tools/gen_include_assets.py`, then
-make with `PM3DS_VERSION=ique` (output `PaperMario3DS_ique.3dsx`). A third copy of the game
-doesn't fit beside the other two in the universal program, so `PM3DS_VERSION=ique
-tools/package.sh` gives it its own title ID (`0x92B9A`) and icon: `StarHaven_iQue.cia` installs
-next to `StarHaven.cia`. Details in `docs/jp_ique_support.md`.
+With all three built, `python3 /project/port/3ds/tools/universal.py` (in the image) links them
+into one program, `port/3ds/StarHaven_universal.elf`, and `universal/starter.c` picks the copy
+that matches the ROM at boot. The copies' code is all loaded, but their data and zeroed globals
+(about 17.5 MB each) share one area (`universal/universal.ld`): each copy's `.data`/`.bss` is
+linked at `__pm3ds_copy_area` in a section the 3DS doesn't load, `tools/copy_images.py` puts its
+data in romfs (`copy_<v>.bin`, zlib), and the starter loads the chosen copy's before calling it.
+The three copies take about 29 MB; two copies side by side took 44.
 
 ## Releases (no game data)
 
@@ -74,16 +76,15 @@ next to `StarHaven.cia`. Details in `docs/jp_ique_support.md`.
 blobs and the `*.vtx.inc.c` / `*.gfx.inc.c` arrays, about 1.5 MB), proves each one can be rebuilt
 bit for bit from the ROM, zeroes it and writes `romdata.bin` (ROM offsets and sizes only) into the
 package's romfs. At boot `pm3ds_rom.c` puts the data back from the player's ROM and checks a CRC32
-of the result. The universal CIA is about 9 MB.
+of the result. The universal CIA is about 11 MB.
 
 ```
 python3 port/3ds/tools/gen_include_assets.py      # also writes build_assets/manifest.tsv
 # build as above, with EXTRA_CFLAGS='' (no Wi-Fi log) for a public release
 bash port/3ds/tools/package.sh port/3ds/PaperMario3DS.elf out/        # out/StarHaven.cia, .3dsx
-# the release package: both versions in one (needs ver/pal and ver/us)
+# the release package: the three versions in one (needs ver/pal, ver/us and ver/ique)
 PM3DS_VERSION=universal bash port/3ds/tools/package.sh port/3ds/StarHaven_universal.elf out/
-# the iQue app (needs ver/ique)
-PM3DS_VERSION=ique bash port/3ds/tools/package.sh port/3ds/PaperMario3DS_ique.elf out/ique/
+# (PM3DS_VERSION=ique alone makes a separate iQue app, title 0x92B9A, as 1.3.12 shipped)
 ```
 It needs `makerom` (3DSGuy/Project_CTR) at `port/3ds/local/bin/makerom` or `$MAKEROM`.
 The icon and banner (`cia/icon.icn`, `cia/banner.bnr`) come from `tools/make_branding.py`

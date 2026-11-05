@@ -8,9 +8,9 @@
 # usage: package.sh <game.elf> <outdir> [3dsx] [cia]     (default: both)
 #   PM3DS_VERSION  pal (default), us, jp or ique, as for make (ique: its own title ID
 #            and icon, cia/icon_ique.icn); universal for the ELF of
-#            tools/universal.py (both copies stripped, both tables in romfs)
+#            tools/universal.py (the three copies stripped, their tables and data in romfs)
 #   BASEROM  the developer's ROM, only to locate the data (ver/<version>/baserom.z64;
-#            universal reads ver/pal and ver/us)
+#            universal reads ver/pal, ver/us and ver/ique)
 #   MAKEROM  makerom binary (port/3ds/local/bin/makerom)
 #   ICON, BANNER  CIA icon.icn / banner.bnr (port/3ds/cia/, from tools/make_branding.py)
 #   NAME     output file name (StarHaven)
@@ -37,12 +37,17 @@ SMDH=$(basename "${ELF%.elf}").smdh            # made by make next to the ELF's 
 mkdir -p "$OUT/romfs"
 rm -f "$OUT/romfs/"*
 if [ "$PM3DS_VERSION" = universal ]; then
-    # the PAL copy (unprefixed symbols), then the US copy (us_ symbols)
-    PM3DS_VERSION=pal ROMDATA_PREFIX= python3 "$PORT/tools/romdata.py" \
-        "$ELF" "$ROOT/ver/pal/baserom.z64" "$OUT/$NAME.pal.elf" "$OUT/romfs/romdata_eu.bin"
-    PM3DS_VERSION=us ROMDATA_PREFIX=us_ python3 "$PORT/tools/romdata.py" \
-        "$OUT/$NAME.pal.elf" "$ROOT/ver/us/baserom.z64" "$OUT/$NAME.elf" "$OUT/romfs/romdata_us.bin"
-    rm -f "$OUT/$NAME.pal.elf"
+    # the PAL copy (unprefixed symbols), then the US (us_) and iQue (iq_) ones,
+    # each in its own section (universal/universal.ld)
+    PM3DS_VERSION=pal ROMDATA_PREFIX= ROMDATA_SECTION=.copy_pal_data python3 "$PORT/tools/romdata.py" \
+        "$ELF" "$ROOT/ver/pal/baserom.z64" "$OUT/$NAME.1.elf" "$OUT/romfs/romdata_eu.bin"
+    PM3DS_VERSION=us ROMDATA_PREFIX=us_ ROMDATA_SECTION=.copy_us_data python3 "$PORT/tools/romdata.py" \
+        "$OUT/$NAME.1.elf" "$ROOT/ver/us/baserom.z64" "$OUT/$NAME.2.elf" "$OUT/romfs/romdata_us.bin"
+    PM3DS_VERSION=ique ROMDATA_PREFIX=iq_ ROMDATA_SECTION=.copy_iq_data python3 "$PORT/tools/romdata.py" \
+        "$OUT/$NAME.2.elf" "$ROOT/ver/ique/baserom.z64" "$OUT/$NAME.elf" "$OUT/romfs/romdata_ique.bin"
+    rm -f "$OUT/$NAME.1.elf" "$OUT/$NAME.2.elf"
+    # each copy's (stripped) data, loaded by universal/starter.c
+    python3 "$PORT/tools/copy_images.py" "$OUT/$NAME.elf" "$OUT/romfs"
 else
     TABLE=romdata_$([ "$PM3DS_VERSION" = pal ] && echo eu || echo "$PM3DS_VERSION").bin
     python3 "$PORT/tools/romdata.py" "$ELF" "$BASEROM" "$OUT/$NAME.elf" "$OUT/romfs/$TABLE"

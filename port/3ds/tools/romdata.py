@@ -48,7 +48,10 @@ STATE = "pm3ds_romdata_state"
 # version; every symbol of the non-PAL copies carries the version's prefix.
 # ROMDATA_PREFIX picks the copy this run strips ("" = the PAL copy).
 PREFIX = os.environ.get("ROMDATA_PREFIX", "")
-COPY_PREFIXES = ("us_",)
+COPY_PREFIXES = ("us_", "iq_")
+# the section holding the copy's data: .data in a one-version program, the
+# copy's own .copy_<v>_data in the combined one (universal/universal.ld)
+SECTION = os.environ.get("ROMDATA_SECTION", ".data")
 # the game's data, which the game checks and keeps (pm3ds_rom_layout.h): PAL's
 # 64 MB dumps repeat 0x2000000-0x3000000 after it (splat.yaml)
 ROM_NAME, ROM_DATA_SIZE = {"pal": (b"Paper Mario (Europe)", 0x3000000),
@@ -110,7 +113,12 @@ class Elf:
                         out.add(off)
         return out
 
-    def file_off(self, addr, size):
+    def file_off(self, addr, size, prefer=None):
+        # the copies' sections share their addresses: look in the copy's first
+        if prefer in self.by_name:
+            s = self.by_name[prefer]
+            if s["addr"] <= addr and addr + size <= s["addr"] + s["size"]:
+                return s["name"], s["off"] + addr - s["addr"]
         for s in self.sections:
             if s["addr"] and s["type"] != 8 and s["addr"] <= addr and addr + size <= s["addr"] + s["size"]:
                 return s["name"], s["off"] + addr - s["addr"]
@@ -205,7 +213,7 @@ def main():
         if not os.environ.get("ROMDATA_DRY"):
             sys.exit("%s not in the ELF: is pm3ds_rom.c linked?" % ANCHOR)
         syms[ANCHOR] = (0, 0, 0)   # dry run against an older ELF
-    relocs = elf.abs32_relocs(".data")
+    relocs = elf.abs32_relocs(SECTION)
     index = gen_include_assets.index_splat()
 
     blobs = []   # (dst, rom, size, kind, symbol)
@@ -228,9 +236,9 @@ def main():
                 problems.append("%s: two different sources for 0x%X" % (sym, dst))
             continue
         seen[dst] = (start, size, kind)
-        sec, foff = elf.file_off(dst, size)
-        if sec != ".data":
-            problems.append("%s: in %s, not .data (would be read-only at run time)" % (sym, sec))
+        sec, foff = elf.file_off(dst, size, SECTION)
+        if sec != SECTION:
+            problems.append("%s: in %s, not %s (would be read-only at run time)" % (sym, sec, SECTION))
             continue
         have = bytes(elf_data[foff:foff + size])
         src = rom[start:start + size]
@@ -258,9 +266,9 @@ def main():
 
     # mark the copy as stripped (pm3ds_rom.c: pm3ds_romdata_state "FULL" -> "STRP")
     state = syms.get(STATE)
-    sec, foff = elf.file_off(state[0], 4) if state else (None, None)
-    if sec != ".data" or bytes(elf_data[foff:foff + 4]) != struct.pack("<I", 0x46554C4C):
-        problems.append("%s missing or not \"FULL\" in .data" % STATE)
+    sec, foff = elf.file_off(state[0], 4, SECTION) if state else (None, None)
+    if sec != SECTION or bytes(elf_data[foff:foff + 4]) != struct.pack("<I", 0x46554C4C):
+        problems.append("%s missing or not \"FULL\" in %s" % (STATE, SECTION))
     else:
         elf_data[foff:foff + 4] = struct.pack("<I", 0x53545250)
 
@@ -276,7 +284,7 @@ def main():
     # restored copy against it on every boot
     data_crc = 0
     for dst, _, size, _ in entries:
-        _, foff = elf.file_off(dst, size)
+        _, foff = elf.file_off(dst, size, SECTION)
         data_crc = zlib.crc32(elf.data[foff:foff + size], data_crc)
     head = struct.pack("<4sIIIIIII32s", MAGIC, VERSION, ROM_DATA_SIZE, crc, syms[ANCHOR][0],
                        len(entries), len(ptrs), data_crc & 0xFFFFFFFF, ROM_NAME)

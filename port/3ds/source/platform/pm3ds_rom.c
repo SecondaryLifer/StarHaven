@@ -169,8 +169,10 @@ static bool load_candidate(const char *path, rom_status_t *st) {
 #if !VERSION_IQUE
     if (is_ique_rom(f, sz)) {   /* the other app's ROM: say which one it needs */
         fclose(f);
+        /* the combined package runs it itself (universal/starter.c picks the copy) */
+        extern char __pm3ds_copy_area[] __attribute__((weak));
         snprintf(st->reason, sizeof st->reason, "This is the iQue ROM");
-        snprintf(st->detail, sizeof st->detail, "it needs Star Haven iQue");
+        snprintf(st->detail, sizeof st->detail, "%s", __pm3ds_copy_area ? "" : "it needs Star Haven iQue");
         pm3ds_log(PM3DS_LOG_WARN, "rom: %s is the iQue ROM", path);
         return false;
     }
@@ -235,8 +237,9 @@ static bool load_candidate(const char *path, rom_status_t *st) {
     }
 #if VERSION_IQUE
     if (other_game && is_pm && (region == 'E' || region == 'P')) {   /* the other app's ROM */
+        extern char __pm3ds_copy_area[] __attribute__((weak));
         snprintf(st->reason, sizeof st->reason, "This is not the iQue ROM");
-        snprintf(st->detail, sizeof st->detail, "it needs Star Haven (USA/Europe)");
+        snprintf(st->detail, sizeof st->detail, "%s", __pm3ds_copy_area ? "" : "it needs Star Haven (USA/Europe)");
         pm3ds_log(PM3DS_LOG_WARN, "rom: %s is the %s ROM", path, region == 'E' ? "US" : "EU");
         return false;
     }
@@ -407,12 +410,15 @@ static void show_problem(const rom_status_t *st) {
     char l_reason[48], l_detail[48];
     snprintf(l_reason, sizeof l_reason, "%s", st->reason[0] ? st->reason : "No ROM found");
     snprintf(l_detail, sizeof l_detail, "%s", st->detail);
-    /* the package runs whichever version the ROM is (universal/starter.c) */
+    /* the package runs whichever version the ROM is (universal/starter.c):
+     * it has a copy area (universal/universal.ld), a one-version build hasn't */
+    extern char __pm3ds_copy_area[] __attribute__((weak));
     const char *lines[] = {
         l_reason,
         l_detail,
         "",
         "Put your own Paper Mario ROM",
+        __pm3ds_copy_area ? "(USA, Europe or iQue) on the SD card" :
 #if VERSION_IQUE
         "(the iQue Player's) on the SD card",
 #else
@@ -496,10 +502,17 @@ static void restore_abort(void) {
 /* check the table against this program before anything is written */
 static bool prepare_restore(void) {
     extern char __exidx_end[], __bss_start__[];
+    /* the combined program (universal/universal.ld) keeps each game copy's
+     * data in one shared area past .bss instead */
+    extern char __pm3ds_copy_area[] __attribute__((weak)), __pm3ds_copy_area_end[] __attribute__((weak));
     const romdata_header_t *h = (const romdata_header_t *)s_table;
     const romdata_blob_t *b = (const romdata_blob_t *)(h + 1);
     const romdata_patch_t *p = (const romdata_patch_t *)(b + h->n_blobs);
     uintptr_t lo = (uintptr_t)__exidx_end, hi = (uintptr_t)__bss_start__;
+    if (__pm3ds_copy_area && __pm3ds_copy_area_end > __pm3ds_copy_area) {
+        lo = (uintptr_t)__pm3ds_copy_area;
+        hi = (uintptr_t)__pm3ds_copy_area_end;
+    }
     s_delta = (uint32_t)(uintptr_t)&pm3ds_romdata_anchor - h->anchor;
     /* The display lists' address words stayed in the program (the loader
      * relocates them): set them aside while the rest is checked and put

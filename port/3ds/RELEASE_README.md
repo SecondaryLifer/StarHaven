@@ -17,8 +17,7 @@ your ROM from the SD card when it starts.
 - A dump of **Paper Mario** as `.z64`, `.n64` or `.v64`:
   - Europe (En, Fr, De, Es), the 48 MB or the 64 MB dump, or
   - USA, or
-  - the iQue Player's Chinese release (纸片马力欧), 40 MB, with its own app,
-    `StarHaven_iQue.cia` (see below).
+  - the iQue Player's Chinese release (纸片马力欧), 40 MB (see below).
 
   The Japanese version is not supported.
 - For sound: the DSP firmware dump at `/3ds/dspfirm.cdc`. Most custom-firmware setups have
@@ -36,12 +35,12 @@ your ROM from the SD card when it starts.
 If the ROM is missing, unreadable or a version Star Haven doesn't know, both screens say
 what's wrong and how to fix it.
 
-**The iQue (Chinese) version** has its own app: install `StarHaven_iQue.cia` (or
-`StarHaven_iQue.3dsx`) and put the iQue ROM in `/3ds/StarHaven/` as above. It installs next to
-the EU/US Star Haven, and each one tells you if it finds the other's ROM. The game, the file
-menu and the bottom screen are in Chinese (the bottom screen draws the game's own Chinese font);
-Settings > Language switches the bottom screen to another language. Its saves are
-`save_ique.fla`. Language packs and N64 save import are for the EU and US versions only.
+**The iQue (Chinese) version** runs in the same app: put the iQue ROM in `/3ds/StarHaven/` as
+above. The game, the file menu and the bottom screen are in Chinese (the bottom screen draws the
+game's own Chinese font); Settings > Language switches the bottom screen to another language.
+Its saves are `save_ique.fla`. Language packs and N64 save import are for the EU and US versions
+only. With more than one ROM on the SD card, Star Haven asks which one to play.
+1.3.12 had a separate `StarHaven_iQue` app: you can delete it (FBI → Titles), your saves stay.
 
 **Updating from 1.0.0 or 1.0.1:** 1.0.2 has a new title ID (the old one was also used by
 other homebrew, and installing either one removed the other), so it installs next to the old
