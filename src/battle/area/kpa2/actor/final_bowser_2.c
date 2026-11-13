@@ -232,6 +232,15 @@ API_CALLABLE(N(MakeLightningBolts)) {
 #include "common/ItemEntityJumpToPos.inc.c"
 #include "common/GetItemEntityPosition.inc.c"
 
+#ifdef _3DS
+// 3DS port: phase 1 leaves its HP in a save byte (s8); hard mode HP goes past 127
+// and came back negative, so phase 2 started at 1 HP (Discord 2026-11-06)
+API_CALLABLE(N(GetSavedHP)) {
+    evt_set_variable(script, *script->ptrReadPos, evt_get_variable(script, GB_FinalBowserHP) & 0xFF);
+    return ApiStatus_DONE2;
+}
+#endif
+
 EvtScript N(EVS_Init) = {
     Call(SetActorVar, ACTOR_SELF, AVAR_TurnCount, 0)
     Call(SetActorVar, ACTOR_SELF, AVAR_TurnsSinceShockwave, 0)
@@ -243,8 +252,14 @@ EvtScript N(EVS_Init) = {
     Call(SetActorVar, ACTOR_SELF, AVAR_TurnsSinceRecover, 0)
     Call(SetActorVar, ACTOR_SELF, AVAR_RecoversLeft, 3)
     Call(SetActorVar, ACTOR_SELF, AVAR_Unused, 0)
+#ifdef _3DS
+    Call(N(GetSavedHP), LVar0)
+    Call(SetEnemyHP, ACTOR_SELF, LVar0)
+    IfLt(LVar0, 1)
+#else
     Call(SetEnemyHP, ACTOR_SELF, GB_FinalBowserHP)
     IfLt(GB_FinalBowserHP, 1)
+#endif
         Call(SetEnemyHP, ACTOR_SELF, 1)
     EndIf
     Call(SetActorScale, ACTOR_SELF, Float(1.5), Float(1.5), Float(1.0))

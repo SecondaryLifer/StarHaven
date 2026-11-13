@@ -263,6 +263,8 @@ void pm3ds_bottom_screen_reload_art(void) {
     build_map();
 }
 
+static u32 s_std_ink = 0x303030;   /* build_font: the standard palette's ink (RGB) */
+
 /* font texture 256x512: glyphs 16 per row, standard palette in the top half,
  * white palette in the bottom half */
 static void build_font(void) {
@@ -279,6 +281,31 @@ static void build_font(void) {
         }
     }
     for (int g = 0; g < s_glyphs; g++) s_glyph_w[g] = f.widths[g];
+    {   /* the standard palette's ink (its most used opaque colour), which Chinese and
+         * Japanese glyphs take on so a subtitle stays the brown it is in English (GitHub #85) */
+        static u32 count[64];
+        static u32 rgb[64];
+        int used = 0;
+        memset(count, 0, sizeof count);
+        for (int i = 0; i < 256 * 256; i++) {
+            const u8 *p = canvas + i * 4;
+            if (p[3] < 200) continue;
+            u32 v = p[0] | p[1] << 8 | p[2] << 16;
+            int k = 0;
+            while (k < used && rgb[k] != v) k++;
+            if (k == used) { if (used == 64) continue; rgb[used++] = v; }
+            count[k]++;
+        }
+        /* the most used dark colour (the glyphs' light rim is used about as much) */
+        int best = -1;
+        u32 total = 0;
+        for (int k = 0; k < used; k++) total += count[k];
+        for (int k = 0; k < used; k++) {
+            u32 v = rgb[k], luma = ((v & 0xFF) * 3 + ((v >> 8) & 0xFF) * 6 + ((v >> 16) & 0xFF)) / 10;
+            if (luma < 128 && count[k] * 20 >= total && (best < 0 || count[k] > count[best])) best = k;
+        }
+        if (best >= 0) s_std_ink = rgb[best];
+    }
     if (C3D_TexInit(&s_font, 256, 512, GPU_RGBA8)) {
         upload_rgba8(&s_font, canvas, 256, 512);
         C3D_TexSetFilter(&s_font, GPU_NEAREST, GPU_LINEAR);
@@ -498,24 +525,32 @@ static void quad2(C3D_Tex *t, float x0, float y0, float x1, float y1,
                   float u0, float v0, float u1, float v1, u32 ct, u32 cb);
 static float sys_glyph(float x, float y, uint32_t cp, float scale, u32 c, bool draw, bool std_pal) {
 #if VERSION_IQUE
-    /* text sizes: the ROM's font, like the game's own text (the built-in pixel
-     * font stays for the small sizes, where it is sharper) */
-    int iq = scale >= 0.78f || cjk_index(cp) < 0 ? iq_glyph_of(cp) : -1;
+    /* full-size text: the ROM's font, like the game's own text, drawn 1:1 (scaled it
+     * blurs); smaller text: the built-in pixel font, sharper there (GitHub #85) */
+    int iq = scale >= 0.95f || cjk_index(cp) < 0 ? iq_glyph_of(cp) : -1;
     if (iq >= 0) {
+        float k = scale >= 0.95f && scale <= 1.25f ? 1.0f : scale;
         if (draw) {
             int slot = iq_slot(iq, std_pal);
             if (slot >= 0) {
                 float gx = (slot % IQ_COLS) * 16.0f, gy = (slot / IQ_COLS) * 16.0f, n = IQ_COLS * 16.0f;
-                quad2(&s_iq, x, y + 0.5f * scale, x + 16 * scale, y + 15.5f * scale,
+                float x0 = k == 1.0f ? (float)(int)(x + 0.5f) : x, y0 = k == 1.0f ? (float)(int)(y + 0.5f) : y;
+                quad2(&s_iq, x0, y0 + 0.5f * k, x0 + 16 * k, y0 + 15.5f * k,
                       gx / n, (gy + 0.5f) / n, (gx + 16) / n, (gy + 15.5f) / n, c, c);
             }
         }
-        return 16 * scale;
+        return 16 * k;
     }
 #endif
-    /* the alpha-only fonts: game-font text in the standard palette is dark */
-    if (std_pal) c = (c & 0xFF000000u) | 0x303030;
-    int ci = cjk_index(cp);
+    /* the alpha-only fonts: game-font text in the standard palette takes its ink, tinted */
+    if (std_pal) {
+        u32 r = ((c & 0xFF) * (s_std_ink & 0xFF)) / 255, gg = (((c >> 8) & 0xFF) * ((s_std_ink >> 8) & 0xFF)) / 255,
+            b = (((c >> 16) & 0xFF) * ((s_std_ink >> 16) & 0xFF)) / 255;
+        c = (c & 0xFF000000u) | r | gg << 8 | b << 16;
+    }
+    /* Japanese: the system font has every kana and kanji; the Chinese pixel font's
+     * kanji beside its kana mixed two fonts in one word (GitHub #85) */
+    int ci = pm3ds_cfg.language == PM3DS_LANG_JA && sys_font_load() ? -1 : cjk_index(cp);
     if (ci >= 0 && cjk_build()) {
         /* 10 px under 0.9 (small text, list rows), else 12 px; 1:1 near the size
          * each matches beside the game's font, scaled otherwise */
@@ -630,13 +665,25 @@ static int glyph_of(char ch) {
     return -1;   /* space */
 }
 
-static float text_width(const char *s, float scale) {
-    s = T(s);   /* the port's own labels in the chosen language (pm3ds_lang.c) */
+/* a phrase with Chinese or Japanese in it is drawn in that font all through, its
+ * Latin letters and digits too: one font per phrase (GitHub #85) */
+static bool has_cjk(const char *s) {
+    for (int len; *s; s += len) {
+        uint32_t cp = pm3ds_txt_next(s, &len);
+        if ((cp & 0x80000000u) && (cp & 0x1FFFFF) >= 0x2E80) return true;   /* not ♪ ♥ or œ */
+    }
+    return false;
+}
+
+/* s already in the chosen language */
+static float text_width_raw(const char *s, float scale) {
     float w = 0;
+    bool cjk = has_cjk(s);
     while (*s) {
         int len;
         uint32_t cp = pm3ds_txt_next(s, &len);
         s += len;
+        if (cjk && cp >= 0x20 && cp < 0x7F) cp |= 0x80000000u;
         if (cp & 0x80000000u) { w += sys_glyph(0, 0, cp & 0x1FFFFF, scale, 0, false, false); continue; }
         int g = glyph_of((char)cp);
         w += (g >= 0 && g < s_glyphs ? s_glyph_w[g] : 5) * scale;
@@ -644,13 +691,19 @@ static float text_width(const char *s, float scale) {
     return w;
 }
 
+static float text_width(const char *s, float scale) {
+    return text_width_raw(T(s), scale);   /* the port's own labels in the chosen language (pm3ds_lang.c) */
+}
+
 /* white = 1 picks the white palette; c tints the result */
 static float text(float x, float y, const char *s, float scale, int white, u32 c) {
     if (!s_font_ok) return x;
     s = T(s);
+    bool cjk = has_cjk(s);
     for (int len; *s; s += len) {
         uint32_t cp = pm3ds_txt_next(s, &len);
-        if (cp & 0x80000000u) {   /* not in the game's font (Japanese) */
+        if (cjk && cp >= 0x20 && cp < 0x7F) cp |= 0x80000000u;
+        if (cp & 0x80000000u) {   /* not in the game's font (Japanese, Chinese) */
             x += sys_glyph(x, y, cp & 0x1FFFFF, scale, c, true, !white);
             continue;
         }
@@ -837,6 +890,29 @@ static float fit(const char *s, float avail, float scale, float lo) {
     if (w <= avail) return scale;
     float f = scale * avail / w;
     return f < lo ? lo : f;
+}
+
+/* text narrowed like fit() and, if even the smallest size is too wide, cut with ".."
+ * (a long translation ran into the switch beside it, GitHub #85) */
+static float text_in(float x, float y, const char *s, float avail, float scale, float lo, int white, u32 c) {
+    static char cut[160];
+    s = T(s);
+    float sc = fit(s, avail, scale, lo);
+    if (text_width_raw(s, sc) <= avail + 0.5f) return text(x, y, s, sc, white, c);
+    /* the longest start that fits with ".." after it, measured as text() will draw it */
+    int n = 0, best = 0;
+    for (int len; s[n]; ) {
+        pm3ds_txt_next(s + n, &len);
+        if (n + len + 3 > (int)sizeof cut) break;
+        n += len;
+        memcpy(cut, s, n);
+        memcpy(cut + n, "..", 3);
+        if (text_width_raw(cut, sc) > avail) break;
+        best = n;
+    }
+    memcpy(cut, s, best);
+    memcpy(cut + best, "..", 3);
+    return text(x, y, cut, sc, white, c);
 }
 
 /* a flat card: thin tan rim, face */
@@ -1162,8 +1238,8 @@ static void draw_party(void) {
     static const char *names[PM3DS_HUD_PARTNERS] = {
         "Goombario", "Kooper", "Bombette", "Parakarry", "Bow", "Watt", "Sushie", "Lakilester",
     };
-    char sub[40];
-    if (h->partner) snprintf(sub, sizeof sub, T("%s is with you"), h->partner_name);
+    char sub[80];
+    if (h->partner) snprintf(sub, sizeof sub, T("%s is with you"), T(h->partner_name));   /* the name too (GitHub #85) */
     else snprintf(sub, sizeof sub, "No partner yet");
     page_title("Party", sub);
     for (int i = 0; i < PM3DS_HUD_PARTNERS; i++) {
@@ -1615,8 +1691,121 @@ static void cook_entry_rect(int slot, float *x0, float *y0, float *x1, float *y1
     *y1 = *y0 + 18;
 }
 
+/* ---- Chuck Quizmo's questions (GitHub #80), a page of the Recipes tab ---------- */
+#define QUIZ_X0 (CX1 - 64)                /* the Recipes <-> Quizzes chip, on the subtitle line */
+static bool s_quiz;                       /* the Recipes tab shows the quizzes */
+static bool s_quiz_spoil;                 /* show the answers of questions not asked yet */
+static int s_quiz_page, s_quiz_open = -1;
+static int s_quiz_done, s_quiz_tries, s_quiz_right;
+static char s_quiz_ans[PM3DS_QUIZ_COUNT][PM3DS_QUIZ_OPT];
+static char s_quiz_text[400];
+static char s_quiz_opts[3][PM3DS_QUIZ_OPT];
+static short s_quiz_starts[8], s_quiz_lens[8];
+static int s_quiz_lines;
+#define QUIZ_TEXT_SCALE 0.68f
+#define QUIZ_LINE_H 13
+
+static void quiz_refresh(void) {
+    pm3ds_quiz_stats(&s_quiz_done, &s_quiz_tries, &s_quiz_right);
+    for (int q = 0; q < PM3DS_QUIZ_COUNT; q++) {
+        char opts[3][PM3DS_QUIZ_OPT];
+        int n = pm3ds_quiz_options(q, opts), r = pm3ds_quiz_right(q);
+        snprintf(s_quiz_ans[q], sizeof s_quiz_ans[q], "%s", r < n ? opts[r] : "");
+    }
+}
+
+static void quiz_open(int q) {
+    s_quiz_open = q;
+    pm3ds_quiz_question(q, s_quiz_text, sizeof s_quiz_text);
+    pm3ds_quiz_options(q, s_quiz_opts);
+    s_quiz_lines = wrap_text(s_quiz_text, QUIZ_TEXT_SCALE, CX1 - CX0 - 12, s_quiz_starts, s_quiz_lens, 8);
+}
+
+static bool quiz_shown(int q) { return q < s_quiz_done || s_quiz_spoil; }
+
+static void draw_quiz(void) {
+    char buf[64];
+    if (s_quiz_open >= 0) {
+        int q = s_quiz_open;
+        chip(CX0, HEAD_Y - 1, CX0 + 50, HEAD_Y + 19, "Back", COL_SEL, 0.85f);
+        snprintf(buf, sizeof buf, T("Question %d"), q + 1);
+        text(CX0 + 58, HEAD_Y, buf, 1.0f, 0, COL_WHITE);
+        if (q >= s_quiz_done) text_right(CX1 - 2, HEAD_Y + 3, "Not asked yet", 0.68f, COL_HINT);
+        card(CX0, 36, CX1, 36 + s_quiz_lines * QUIZ_LINE_H + 6, COL_AREA);
+        for (int l = 0; l < s_quiz_lines; l++) {
+            char line[96];
+            int n = s_quiz_lens[l] < (int)sizeof line - 1 ? s_quiz_lens[l] : (int)sizeof line - 1;
+            memcpy(line, s_quiz_text + s_quiz_starts[l], n);
+            line[n] = '\0';
+            text(CX0 + 6, 39 + l * QUIZ_LINE_H, line, QUIZ_TEXT_SCALE, 0, COL_WHITE);
+        }
+        float y = 36 + s_quiz_lines * QUIZ_LINE_H + 14;
+        for (int k = 0; k < 3; k++) {
+            bool right = quiz_shown(q) && k == pm3ds_quiz_right(q);
+            tile(CX0, y, CX1, y + 20, 6, right ? COL_SEL : COL_TAB_ON);
+            text(CX0 + 8, y + 2, s_quiz_opts[k], fit(s_quiz_opts[k], CX1 - CX0 - 60, 0.78f, 0.5f), 0, COL_WHITE);
+            if (right) text_right(CX1 - 6, y + 4, "Right", 0.68f, COL_WHITE);
+            y += 24;
+        }
+        return;
+    }
+    int pages = pages_of(PM3DS_QUIZ_COUNT, COOK_PER_PAGE);
+    if (s_quiz_page >= pages) s_quiz_page = 0;
+    snprintf(buf, sizeof buf, T("%d of %d answered, %d right of %d"), s_quiz_done, PM3DS_QUIZ_COUNT, s_quiz_right, s_quiz_tries);
+    text(CX0 + 2, HEAD_Y, "Chuck Quizmo", fit("Chuck Quizmo", 88, 1.05f, 0.6f), 0, COL_WHITE);
+    text(CX0 + 2, SUB_Y, buf, fit(buf, QUIZ_X0 - CX0 - 6, 0.8f, 0.45f), 0, COL_SUB);
+    chip(COOK_ALL_X0, HEAD_Y, COOK_ALL_X1, HEAD_Y + 18, s_quiz_spoil ? "Hide new" : "Spoilers",
+         s_quiz_spoil ? COL_SEL : COL_OFF, 0.7f);
+    chip(QUIZ_X0, SUB_Y - 2, CX1, SUB_Y + 14, "Recipes", COL_TAB_ON, fit("Recipes", 56, 0.66f, 0.45f));
+    pager(s_quiz_page, pages);
+    bar(CX0 + 2, BODY_Y, CX1 - CX0 - 2, 5, s_quiz_done, PM3DS_QUIZ_COUNT, COL_GOLD);
+    for (int slot = 0; slot < COOK_PER_PAGE; slot++) {
+        int q = s_quiz_page * COOK_PER_PAGE + slot;
+        if (q >= PM3DS_QUIZ_COUNT) break;
+        float x0, y0, x1, y1;
+        cook_entry_rect(slot, &x0, &y0, &x1, &y1);
+        tile(x0, y0, x1, y1, 6, q < s_quiz_done ? COL_TAB_ON : COL_OFF);
+        snprintf(buf, sizeof buf, "%d", q + 1);
+        text(x0 + 4, y0 + 2, buf, 0.66f, 0, q < s_quiz_done ? COL_WHITE : RGBA(255, 255, 255, 170));
+        const char *a = quiz_shown(q) ? s_quiz_ans[q] : "???";
+        text(x0 + 22, y0 + 1, a, fit(a, x1 - x0 - 26, 0.72f, 0.45f), 0, q < s_quiz_done ? COL_WHITE : RGBA(255, 255, 255, 170));
+    }
+}
+
+static void quiz_tap(int px, int py) {
+    if (s_quiz_open >= 0) {
+        if (in(px, py, CX0 - 4, HEAD_Y - 5, CX0 + 54, HEAD_Y + 23)) s_quiz_open = -1;
+        return;
+    }
+    if (pager_tap(px, py, s_quiz_page, pages_of(PM3DS_QUIZ_COUNT, COOK_PER_PAGE)) < 0 &&
+        in(px, py, QUIZ_X0 - 2, SUB_Y - 5, CX1 + 2, SUB_Y + 17)) {   /* the page arrows come first */
+        s_quiz = false;
+        return;
+    }
+    if (in(px, py, COOK_ALL_X0 - 2, HEAD_Y - 4, COOK_ALL_X1 + 2, HEAD_Y + 22)) {
+        s_quiz_spoil = !s_quiz_spoil;
+        return;
+    }
+    int np = pager_tap(px, py, s_quiz_page, pages_of(PM3DS_QUIZ_COUNT, COOK_PER_PAGE));
+    if (np >= 0) { s_quiz_page = np; return; }
+    for (int slot = 0; slot < COOK_PER_PAGE; slot++) {
+        int q = s_quiz_page * COOK_PER_PAGE + slot;
+        if (q >= PM3DS_QUIZ_COUNT) break;
+        float x0, y0, x1, y1;
+        cook_entry_rect(slot, &x0, &y0, &x1, &y1);
+        if (in(px, py, x0, y0 - 1, x1, y1 + 2)) {
+            quiz_open(q);
+            return;
+        }
+    }
+}
+
 static void draw_cook(void) {
     char buf[40];
+    if (s_quiz) {
+        draw_quiz();
+        return;
+    }
     if (s_cook_open >= 0 && s_cook_open < s_cook.count) {
         draw_dish();
         return;
@@ -1628,6 +1817,7 @@ static void draw_cook(void) {
     page_title("Recipes", buf);
     chip(COOK_ALL_X0, HEAD_Y, COOK_ALL_X1, HEAD_Y + 18, s_cook_all ? "Hide new" : "Show all",
          s_cook_all ? COL_SEL : COL_OFF, 0.7f);
+    chip(QUIZ_X0, SUB_Y - 2, CX1, SUB_Y + 14, "Quizzes", COL_TAB_ON, fit("Quizzes", 56, 0.66f, 0.45f));
     pager(s_cook_page, pages);
     bar(CX0 + 2, BODY_Y, CX1 - CX0 - 2, 5, s_cook.cooked, s_cook.count, COL_GOLD);
     for (int slot = 0; slot < COOK_PER_PAGE; slot++) {
@@ -1645,6 +1835,17 @@ static void draw_cook(void) {
 }
 
 static void cook_tap(int px, int py) {
+    if (s_quiz) {
+        quiz_tap(px, py);
+        return;
+    }
+    if (s_cook_open < 0 && pager_tap(px, py, s_cook_page, pages_of(s_cook.count, COOK_PER_PAGE)) < 0 &&
+        in(px, py, QUIZ_X0 - 2, SUB_Y - 5, CX1 + 2, SUB_Y + 17)) {   /* the page arrows come first */
+        s_quiz = true;
+        s_quiz_open = -1;
+        quiz_refresh();
+        return;
+    }
     if (s_cook_open >= 0) {
         if (in(px, py, CX0 - 4, HEAD_Y - 5, CX0 + 54, HEAD_Y + 23)) {
             s_cook_open = -1;
@@ -1696,7 +1897,10 @@ static int s_badge_page, s_badge_msg_timer;
 static char s_badge_msg[48];   /* shown in place of the BP line for a while */
 static bool s_loadout_saving;  /* Save tapped: the next loadout tapped stores the badges on now */
 static int s_loadout_count[PM3DS_BADGE_LOADOUTS];
-#define BADGE_ROWS 6
+#define BADGE_ROWS 5
+#define GEAR_Y0 154                         /* boots and hammer (GitHub #79), above the loadouts */
+#define GEAR_Y1 172
+#define GEAR_X(g, l) (CX0 + (g) * 126 + 22 + (l) * 34)   /* level l's chip, 32 wide */
 #define BADGE_PER_PAGE (BADGE_ROWS * 2)
 #define LOADOUT_Y0 176
 #define LOADOUT_Y1 198
@@ -1728,7 +1932,7 @@ static void draw_badges(void) {
     else if (s_badge_msg_timer > 0) snprintf(buf, sizeof buf, "%s", s_badge_msg);
     else snprintf(buf, sizeof buf, T("BP left: %d of %d"), left, s_badges.bp_max);
     text(CX0 + 2, HEAD_Y, "Badges", 1.05f, 0, COL_WHITE);
-    text(CX0 + 2, SUB_Y, buf, fit(buf, pages > 1 ? 156 : 246, 0.8f, 0.5f), 0, COL_SUB);
+    text_in(CX0 + 2, SUB_Y, buf, pages > 1 ? 156 : 246, 0.8f, 0.5f, 0, COL_SUB);
     pager(s_badge_page, pages);
     bar(CX0 + 2, BODY_Y, CX1 - CX0 - 2, 5, s_badges.bp_used, s_badges.bp_max, COL_GOLD);
     if (s_badges.count == 0) {
@@ -1745,6 +1949,17 @@ static void draw_badges(void) {
         text(x0 + 21, y0 + 1, s_badges.name[i], fit(s_badges.name[i], x1 - x0 - 42, 0.75f, 0.45f), 0, COL_WHITE);
         snprintf(buf, sizeof buf, "%d", s_badges.cost[i]);
         text_right(x1 - 5, y0 + 2, buf, 0.75f, on ? COL_WHITE : COL_HINT);
+    }
+    /* boots and hammer: any level found so far (GitHub #79) */
+    for (int g = 0; g < 2; g++) {
+        static const char *const names[3] = { "Normal", "Super", "Ultra" };
+        int best = pm3ds_gear_best(g), cur = pm3ds_gear_level(g);
+        if (best < 0) continue;
+        draw_ui_icon(g ? UI_ICON_HAMMER : UI_ICON_BOOTS, CX0 + g * 126 + 2, GEAR_Y0 + 1, 16, COL_WHITE);
+        for (int l = 0; l <= best && l < 3; l++) {
+            u32 face = l == cur ? COL_SEL : s_badges.can_change ? COL_TAB_ON : COL_OFF;
+            chip(GEAR_X(g, l), GEAR_Y0, GEAR_X(g, l) + 32, GEAR_Y1, names[l], face, fit(names[l], 28, 0.6f, 0.4f));
+        }
     }
     /* loadouts: 1 2 3 put a saved set on; Save, then a number, stores the badges on now */
     text(CX0 + 2, LOADOUT_Y0 + 4, "Loadouts", fit("Loadouts", 60, 0.75f, 0.5f), 0, COL_SUB);
@@ -1781,6 +1996,15 @@ static void loadout_tap(int n) {
 static void badges_tap(int px, int py) {
     int np = pager_tap(px, py, s_badge_page, pages_of(s_badges.count, BADGE_PER_PAGE));
     if (np >= 0) { s_badge_page = np; return; }
+    if (py >= GEAR_Y0 - 1 && py < GEAR_Y1 + 2) {   /* boots and hammer */
+        for (int g = 0; g < 2; g++)
+            for (int l = 0; l <= pm3ds_gear_best(g) && l < 3; l++)
+                if (px >= GEAR_X(g, l) - 1 && px < GEAR_X(g, l) + 33 && l != pm3ds_gear_level(g)) {
+                    if (pm3ds_gear_set(g, l)) badge_say(T(g ? "Hammer changed" : "Boots changed"));
+                    return;
+                }
+        return;
+    }
     if (py >= LOADOUT_Y0 - 3 && py < LOADOUT_Y1 + 4) {
         for (int n = 0; n < PM3DS_BADGE_LOADOUTS; n++) {
             if (px >= LOADOUT_X(n) - 2 && px < LOADOUT_X(n) + 32) { loadout_tap(n); return; }
@@ -2283,10 +2507,10 @@ static const char *const s_text_names[TEXT_SPEEDS] = { "Normal", "Fast", "Instan
 /* The Settings page: a list in sections, dragged up and down (a scroll bar
  * shows where); a row changes its setting when tapped without dragging. */
 enum { OPT_LANG, OPT_SCREEN, OPT_FPS, OPT_3D, OPT_COLORS, OPT_TEXT, OPT_FF_SPEED, OPT_FF_BUTTON, OPT_DROPS, OPT_BEEP, OPT_DPAD,
-       OPT_AUTOSAVE, OPT_UPDATE, OPT_HUD, OPT_ICE, OPT_MUSIC, OPT_SFX, OPT_JUKEBOX, OPT_STEER_SPIN, OPT_STEER_JUMP, OPT_UPDATE_NOW, OPT_PACK, OPT_COUNT };
+       OPT_AUTOSAVE, OPT_UPDATE, OPT_HUD, OPT_ICE, OPT_MUSIC, OPT_SFX, OPT_JUKEBOX, OPT_STEER_SPIN, OPT_STEER_JUMP, OPT_UPDATE_NOW, OPT_PACK, OPT_DIM, OPT_COUNT };
 #define OPT_HEADER 0x100          /* + section number */
 static const int s_opt_list[] = {
-    OPT_HEADER + 0, OPT_LANG, OPT_PACK, OPT_SCREEN, OPT_FPS, OPT_3D, OPT_COLORS, OPT_HUD, OPT_ICE,
+    OPT_HEADER + 0, OPT_LANG, OPT_PACK, OPT_SCREEN, OPT_FPS, OPT_3D, OPT_COLORS, OPT_HUD, OPT_ICE, OPT_DIM,
     OPT_HEADER + 1, OPT_TEXT, OPT_FF_SPEED, OPT_FF_BUTTON, OPT_AUTOSAVE, OPT_DROPS, OPT_BEEP, OPT_DPAD, OPT_STEER_SPIN, OPT_STEER_JUMP,
     OPT_HEADER + 2, OPT_MUSIC, OPT_SFX, OPT_JUKEBOX,
     OPT_HEADER + 3, OPT_UPDATE_NOW, OPT_UPDATE,
@@ -2331,6 +2555,7 @@ static void opt_value(int id, char *buf, size_t size) {
         case OPT_BEEP:      v = pm3ds_cfg.hp_beep ? "On" : "Off"; break;
         case OPT_HUD:       v = pm3ds_cfg.battle_hud ? "On" : "Off"; break;
         case OPT_ICE:       v = pm3ds_cfg.ice_fx ? "On" : "Off"; break;
+        case OPT_DIM:       v = pm3ds_cfg.bottom_dim ? "Off when idle" : "Always on"; break;
         case OPT_DPAD:      v = pm3ds_cfg.dpad_menus ? "Cursor" : "C buttons"; break;
         case OPT_MUSIC:     v = pm3ds_cfg.music_on ? "On" : "Off"; break;
         case OPT_SFX:       v = pm3ds_cfg.sfx_on ? "On" : "Off"; break;
@@ -2370,7 +2595,7 @@ static const char *const s_opt_labels[OPT_COUNT] = {
     "Language", "Screen", "Frame rate", "3D depth", "Colors", "Text speed", "Fast-forward speed", "Fast-forward button",
     "Heart & flower drops", "Low HP beep", "D-pad in menus", "Autosave", "Check at launch",
     "Battle HP/FP bar", "Ice Power effect", "Music", "Sound effects", "Jukebox", "Steerable spin", "Steerable jump",
-    "Check for updates", "Game text",
+    "Check for updates", "Game text", "Bottom screen",
 };
 
 /* Quit game (in game, GitHub #67): back to the title, saving first or not.
@@ -2557,6 +2782,7 @@ static void options_tap(int px, int py) {
                 case OPT_BEEP: pm3ds_cfg.hp_beep = !pm3ds_cfg.hp_beep; break;
                 case OPT_HUD: pm3ds_cfg.battle_hud = !pm3ds_cfg.battle_hud; break;
                 case OPT_ICE: pm3ds_cfg.ice_fx = !pm3ds_cfg.ice_fx; break;
+                case OPT_DIM: pm3ds_cfg.bottom_dim = !pm3ds_cfg.bottom_dim; break;
                 case OPT_DPAD: pm3ds_cfg.dpad_menus = !pm3ds_cfg.dpad_menus; break;
                 case OPT_MUSIC: pm3ds_cfg.music_on = !pm3ds_cfg.music_on; pm3ds_sound_changed(); break;
                 case OPT_SFX: pm3ds_cfg.sfx_on = !pm3ds_cfg.sfx_on; pm3ds_sound_changed(); break;
@@ -2642,8 +2868,8 @@ static void draw_cheats(void) {
         /* a Level 99 save has these two whatever the switch says */
         bool on = pm3ds_cheat_on(i) || (pm3ds_level99() && (i == PM3DS_CHEAT_LEVELS || i == PM3DS_CHEAT_NOCAP));
         tile(CX0, y, CX1, y + CHEAT_ROW_H - 3, 6, on ? COL_SEL : COL_TAB_ON);
-        text(CX0 + 7, y, s_cheat_names[i], fit(s_cheat_names[i], 112, 0.72f, 0.5f), 0, COL_WHITE);
-        text(CX0 + 124, y + 1, s_cheat_help[i], fit(s_cheat_help[i], 96, 0.58f, 0.45f), 0, COL_HINT);
+        text_in(CX0 + 7, y, s_cheat_names[i], 112, 0.72f, 0.5f, 0, COL_WHITE);
+        text_in(CX0 + 124, y + 1, s_cheat_help[i], 270 - 4 - (CX0 + 124), 0.58f, 0.45f, 0, COL_HINT);   /* up to the switch */
         chip(270, y + 1, CX1 - 4, y + CHEAT_ROW_H - 4, on ? "On" : "Off", on ? COL_GOLD : COL_OFF, 0.6f);
     }
     button(s_btn_opt, "Give");
@@ -3058,13 +3284,23 @@ static void ng_touch(int px, int py) {
 
 /* console-font text word-wrapped to 36 columns, each line centred on cx */
 static void ng_help(float cx, float y, const char *str) {
-    char line[40];
+    /* translated whole, then wrapped: the lines of the English text were looked up one by one
+     * and found nothing (GitHub #85). Breaks at a space, or before a Chinese/Japanese character. */
+    char line[160];
+    str = T(str);
     while (*str) {
-        int n = (int)strlen(str), cut = n;
-        if (n > 36) {
-            for (cut = 36; cut > 0 && str[cut] != ' '; cut--) {}
-            if (cut == 0) cut = 36;
+        int i = 0, brk = -1, len;
+        float w = 0;
+        while (str[i]) {
+            uint32_t cp = pm3ds_txt_next(str + i, &len);
+            float cw = (cp & 0x80000000u) ? 10 : 8;
+            if (w + cw > 288 && i > 0) break;
+            if (cp == ' ' || (cp & 0x80000000u)) brk = i;
+            w += cw;
+            i += len;
         }
+        int cut = str[i] && brk > 0 ? brk : i;
+        if (cut > (int)sizeof line - 1) cut = (int)sizeof line - 1;
         memcpy(line, str, cut);
         line[cut] = 0;
         small_text_center(cx, y, line, 1.0f, COL_PANEL_EDGE);
@@ -3300,8 +3536,54 @@ static void select_tab(int tab) {
     if (tab == TAB_FOUND && s_found.here >= 0) s_found_page = s_found.here / FOUND_ROWS;
     if (tab == TAB_FOUND) s_found_open = -1;
     if (tab == TAB_MAP) s_map_follow = true;
-    if (tab == TAB_COOK) { s_cook_open = -1; pm3ds_recipe_query(&s_cook); }
+    if (tab == TAB_COOK) { s_cook_open = -1; s_quiz_open = -1; pm3ds_recipe_query(&s_cook); if (s_quiz) quiz_refresh(); }
     if (tab == TAB_BADGES) { s_badge_msg_timer = 0; s_loadout_saving = false; badges_refresh(); }
+}
+
+/* Settings > Bottom screen (GitHub #86, "play it as it was"): in game the bottom
+ * screen's light goes off after a while without a touch, and a touch turns it on
+ * again. The HOME Menu, sleep and quitting always get it back on. */
+#define LCD_IDLE_MS 10000
+static bool s_lcd_off;
+static u64 s_lcd_idle_ms;
+
+static void lcd_light(bool on) {
+    static int ready;   /* 0 not tried, 1 up, -1 no gsp::Lcd */
+    if (ready == 0) ready = R_SUCCEEDED(gspLcdInit()) ? 1 : -1;
+    if (ready < 0) return;
+    if (on) GSPLCD_PowerOnBacklight(GSPLCD_SCREEN_BOTTOM);
+    else GSPLCD_PowerOffBacklight(GSPLCD_SCREEN_BOTTOM);
+    s_lcd_off = !on;
+    s_lcd_idle_ms = osGetTime();
+}
+
+/* the light back on whatever happens next: boot, a panic screen, quitting */
+void pm3ds_bottom_screen_lcd_restore(void) {
+    if (s_lcd_off) lcd_light(true);
+}
+
+static void lcd_apt_hook(APT_HookType hook, void *param) {
+    (void)param;
+    if (s_lcd_off) lcd_light(true);   /* suspend, sleep, exit: the system's screens are lit */
+    s_lcd_idle_ms = osGetTime();
+    (void)hook;
+}
+
+static void lcd_tick(void) {
+    static aptHookCookie cookie;
+    static bool hooked;
+    if (!hooked) {
+        aptHook(&cookie, lcd_apt_hook, NULL);
+        hooked = true;
+        s_lcd_idle_ms = osGetTime();
+    }
+    bool want = pm3ds_cfg.bottom_dim && s_info.in_game && !s_quit && s_ng_page == NG_CLOSED;
+    if (!want) {
+        if (s_lcd_off) lcd_light(true);
+        s_lcd_idle_ms = osGetTime();
+    } else if (!s_lcd_off && osGetTime() - s_lcd_idle_ms > LCD_IDLE_MS) {
+        lcd_light(false);
+    }
 }
 
 static void handle_touch(void) {
@@ -3314,6 +3596,21 @@ static void handle_touch(void) {
     if (down) hidTouchRead(&tp);
     bool pressed = down && !was_down, released = !down && was_down;
     was_down = down;
+    {   /* Settings > Bottom screen: a touch on the dark screen only turns the light back on */
+        static bool swallow;
+        if (down) s_lcd_idle_ms = osGetTime();
+        if (s_lcd_off) {
+            if (pressed) {
+                lcd_light(true);
+                swallow = true;
+            }
+            return;
+        }
+        if (swallow) {
+            if (!down) swallow = false;
+            return;
+        }
+    }
 
     {   /* the Settings list: drag to scroll, a tap acts on release */
         static bool opt_held;
@@ -3530,6 +3827,7 @@ void pm3ds_bottom_screen_init(void) {
     build_atlas();
     build_map();
     build_small_font();
+    if (pm3ds_cfg.bottom_dim) lcd_light(true);   /* a crash may have left it off */
 }
 
 /* once per presented frame (input + state) */
@@ -3559,6 +3857,7 @@ void pm3ds_bottom_screen_tick(unsigned frame) {
     pm3ds_tm_get(&s_tm);
     if (s_tm.kind == PM3DS_TM_TARGET && s_info.in_battle) pm3ds_gfx_request_top_copy();   /* the portraits */
     icons_update();
+    lcd_tick();
 }
 
 /* GPU state for a UI pass on target t with pixel matrix m; false if the

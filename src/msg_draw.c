@@ -453,6 +453,13 @@ void appendGfx_message(MessagePrintState* printer, s16 posX, s16 posY, u16 addit
                                 }
                                 s32 cropped = pm3ds_view_mode() == 1 || pm3ds_view_mode() == 2;   // Fill, Wide
                                 printer->windowBasePos.y = (cropped && lowered[slot]) ? 20 : 13;
+                                if (cropped && lowered[slot]) {
+                                    // a choice opening under it moves down as much (msg.c, GitHub #87)
+                                    extern u16 pm3ds_bubble_lowered_at;
+                                    extern bool pm3ds_bubble_lowered;
+                                    pm3ds_bubble_lowered_at = gGameStatusPtr->frameCounter;
+                                    pm3ds_bubble_lowered = true;
+                                }
                             }
 #else
                             printer->windowBasePos.y = 13;

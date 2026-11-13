@@ -1,5 +1,8 @@
 #include "common.h"
 #include "effects_internal.h"
+#ifdef _3DS
+#include "pm3ds_gfx_tags.h"
+#endif
 
 extern Gfx D_09000600_3936A0[];
 extern Gfx D_090008E8_393988[];
@@ -164,9 +167,17 @@ void flashing_box_shockwave_appendGfx(void* effect) {
         guMtxF2L(mtxTransform, &gDisplayContext->matrixStack[gMatrixListPos]);
 
         gSPMatrix(gMainGfxPos++, &gDisplayContext->matrixStack[gMatrixListPos++], G_MTX_PUSH | G_MTX_MUL | G_MTX_MODELVIEW);
+#ifdef _3DS
+        // 3DS port: the RDP's decal depth draws this flicker only where it lies on the
+        // shocked actor; a depth test drew the whole box (Discord report 2026-11-05)
+        gDPNoOpTag(gMainGfxPos++, PM3DS_GFX_TAG_DECAL_BAND);
+#endif
         gSPDisplayList(gMainGfxPos++, D_09000600_3936A0);
         gDPSetTileSize(gMainGfxPos++, G_TX_RENDERTILE, time * 8, time * 8, time * 8 + 128, time * 8 + 128);
         gSPDisplayList(gMainGfxPos++, D_090008E8_393988);
+#ifdef _3DS
+        gDPNoOpTag(gMainGfxPos++, PM3DS_GFX_TAG_DECAL_BAND_END);
+#endif
         gSPPopMatrix(gMainGfxPos++, G_MTX_MODELVIEW);
     }
 

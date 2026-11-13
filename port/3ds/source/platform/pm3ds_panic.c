@@ -42,6 +42,7 @@ void pm3ds_panic_impl(const char *file, int line, const char *fmt, ...) {
     vsnprintf(msg, sizeof(msg), fmt, ap);
     va_end(ap);
     msg[sizeof(msg) - 1] = '\0';
+    { extern void pm3ds_bottom_screen_lcd_restore(void); pm3ds_bottom_screen_lcd_restore(); }   /* Settings > Bottom screen */
 
     pm3ds_stats.panic_count++;
     pm3ds_log(PM3DS_LOG_ERROR, "PANIC %s:%d %s", file, line, msg);

@@ -18,6 +18,7 @@
 #include "hud_element.h"
 #include "map.h"
 #include "game_modes.h"
+#include "message_ids.h"
 
 #include <string.h>
 
@@ -130,6 +131,117 @@ void pm3ds_tattle_text(int entry, char* out, int size) {
     if (entry >= 0 && entry < sNumEntries) {
         pm3ds_decode_msg(bActorTattles[sEntryType[entry]], out, size, true);
     }
+}
+
+/* a message was just loaded (src/msg.c): hard mode shows its enemy stats in
+ * the tattles, in battle and in the Log tab alike */
+void pm3ds_msg_loaded(u32 msgID, void* dest, s32 cap) {
+    extern bool pm3ds_hard_mode(void);
+    void pm3ds_hard_tattle_stats(u8* m, s32 cap);   /* touch_menu.c */
+
+    if (!pm3ds_hard_mode()) {
+        return;
+    }
+    for (s32 t = 0; t < NUM_ACTOR_TYPES; t++) {
+        if ((u32)bActorTattles[t] == msgID) {
+            pm3ds_hard_tattle_stats(dest, cap);
+            return;
+        }
+    }
+}
+
+/* ---- Chuck Quizmo (GitHub #80) ---------------------------------------------- */
+/* GB_CompletedQuizzes counts the right answers, and question n is
+ * MSG_QuizQuestion_01 + n with choices MSG_QuizChoice_01 + n; the right choices
+ * as world/common/complete/Quizmo.inc.c has them (every map's copy is the same) */
+void dma_load_msg(u32 msgID, void* dest);   /* src/msg.c */
+
+static const u8 sQuizAnswers[PM3DS_QUIZ_COUNT] = {
+    2, 1, 1, 2, 2, 0, 2, 0,
+    2, 1, 0, 2, 1, 1, 0, 2,
+    0, 2, 1, 0, 0, 2, 1, 0,
+    2, 1, 1, 2, 2, 1, 1, 1,
+    0, 2, 2, 2, 2, 0, 1, 1,
+    2, 1, 2, 1, 2, 0, 0, 1,
+    1, 0, 1, 2, 1, 0, 2, 2,
+    1, 2, 0, 2, 2, 1, 1, 1,
+};
+
+void pm3ds_quiz_stats(int* done, int* tries, int* right) {
+    *done = *tries = *right = 0;
+    if (gGameStatusPtr == nullptr) {
+        return;
+    }
+    s32 n = evt_get_variable(nullptr, GB_CompletedQuizzes);
+    *done = n < 0 ? 0 : n > PM3DS_QUIZ_COUNT ? PM3DS_QUIZ_COUNT : n;
+    *tries = gPlayerData.quizzesAnswered;
+    *right = gPlayerData.quizzesCorrect;
+}
+
+int pm3ds_quiz_right(int q) {
+    return q >= 0 && q < PM3DS_QUIZ_COUNT ? sQuizAnswers[q] : 0;
+}
+
+void pm3ds_quiz_question(int q, char* out, int size) {
+    static u8 buf[0x400 + 1];
+    out[0] = '\0';
+    if (q < 0 || q >= PM3DS_QUIZ_COUNT) {
+        return;
+    }
+    dma_load_msg(MSG_QuizQuestion_01 + q, buf);
+    buf[0x400] = MSG_CHAR_READ_END;
+    // the first page only says "Question.": start after it
+    s32 i = 0;
+    while (i < 0x400 && buf[i] != MSG_CHAR_READ_NEXT && buf[i] != MSG_CHAR_READ_END) {
+        i++;
+    }
+    pm3ds_decode_msg((s32)(buf[i] == MSG_CHAR_READ_NEXT ? buf + i + 1 : buf), out, size, true);
+}
+
+int pm3ds_quiz_options(int q, char out[3][PM3DS_QUIZ_OPT]) {
+    static u8 buf[0x400], one[96];
+    s32 n = 0;
+    if (q < 0 || q >= PM3DS_QUIZ_COUNT) {
+        return 0;
+    }
+    dma_load_msg(MSG_QuizChoice_01 + q, buf);
+    for (s32 k = 0; k < 3; k++) {
+        out[k][0] = '\0';
+        // each choice's text follows its [Option k] (0xFF 0x21 k) up to the line's end
+        for (s32 i = 0; i + 2 < (s32)sizeof(buf) && buf[i] != MSG_CHAR_READ_END; i++) {
+            if (buf[i] != MSG_CHAR_READ_FUNCTION || buf[i + 1] != MSG_READ_FUNC_OPTION || buf[i + 2] != k) {
+                continue;
+            }
+            // up to the line's end; function codes (the iQue's [Right 8] in front of a
+            // choice) are copied with their arguments and the decoder skips them
+            extern s32 pm3ds_msg_func_args(u8 f);
+            s32 len = 0;
+            for (s32 j = i + 3; j < (s32)sizeof(buf) && len < (s32)sizeof(one) - 1;) {
+                u8 b = buf[j];
+                if (b == MSG_CHAR_READ_FUNCTION) {
+                    s32 n = j + 1 < (s32)sizeof(buf) ? pm3ds_msg_func_args(buf[j + 1]) : -1;
+                    if (n < 0 || buf[j + 1] == MSG_READ_FUNC_OPTION || len + 2 + n >= (s32)sizeof(one) - 1 ||
+                        j + 2 + n > (s32)sizeof(buf)) {
+                        break;
+                    }
+                    for (s32 k = 0; k < 2 + n; k++) {
+                        one[len++] = buf[j++];
+                    }
+                    continue;
+                }
+                if (b >= 0xF0) {
+                    break;
+                }
+                one[len++] = b;
+                j++;
+            }
+            one[len] = MSG_CHAR_READ_END;
+            pm3ds_decode_msg((s32)one, out[k], PM3DS_QUIZ_OPT, false);
+            n = k + 1;
+            break;
+        }
+    }
+    return n;
 }
 
 /* ---- item tracker ---------------------------------------------------------- */

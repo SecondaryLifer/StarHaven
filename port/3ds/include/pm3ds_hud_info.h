@@ -137,6 +137,14 @@ typedef struct {
 } pm3ds_recipe_detail_t;
 void pm3ds_recipe_detail(int item, pm3ds_recipe_detail_t *out);
 
+/* Chuck Quizmo's questions (GitHub #80): they come in order, one more after each right answer */
+#define PM3DS_QUIZ_COUNT 64
+#define PM3DS_QUIZ_OPT 40
+void pm3ds_quiz_stats(int *done, int *tries, int *right);   /* questions done, answers given, right ones */
+int pm3ds_quiz_right(int q);                                /* the right choice, 0..2 */
+void pm3ds_quiz_question(int q, char *out, int size);
+int pm3ds_quiz_options(int q, char out[3][PM3DS_QUIZ_OPT]);   /* how many */
+
 /* N64 images the menu draws, decoded once into the UI atlas */
 enum {
     UI_IMG_HEART, UI_IMG_FLOWER, UI_IMG_COIN, UI_IMG_STAR_POINT, UI_IMG_STAR_PIECE,

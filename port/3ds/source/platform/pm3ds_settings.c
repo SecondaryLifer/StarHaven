@@ -87,6 +87,7 @@ void pm3ds_settings_load(void) {
     pm3ds_cfg.hp_beep = true;
     pm3ds_cfg.battle_hud = true;
     pm3ds_cfg.ice_fx = true;
+    pm3ds_cfg.bottom_dim = false;
     pm3ds_cfg.music_on = true;
     pm3ds_cfg.sfx_on = true;
     pm3ds_cfg.jukebox = -1;
@@ -114,6 +115,7 @@ void pm3ds_settings_load(void) {
             else if (sscanf(line, "hp_beep=%d", &v) == 1) pm3ds_cfg.hp_beep = v != 0;
             else if (sscanf(line, "battle_hud=%d", &v) == 1) pm3ds_cfg.battle_hud = v != 0;
             else if (sscanf(line, "ice_fx=%d", &v) == 1) pm3ds_cfg.ice_fx = v != 0;
+            else if (sscanf(line, "bottom_dim=%d", &v) == 1) pm3ds_cfg.bottom_dim = v != 0;
             else if (sscanf(line, "music_on=%d", &v) == 1) pm3ds_cfg.music_on = v != 0;
             else if (sscanf(line, "sfx_on=%d", &v) == 1) pm3ds_cfg.sfx_on = v != 0;
             else if (sscanf(line, "jukebox=%d", &v) == 1) pm3ds_cfg.jukebox = v;
@@ -160,6 +162,7 @@ void pm3ds_settings_save(void) {
     fprintf(f, "hp_beep=%d\n", pm3ds_cfg.hp_beep);
     fprintf(f, "battle_hud=%d\n", pm3ds_cfg.battle_hud);
     fprintf(f, "ice_fx=%d\n", pm3ds_cfg.ice_fx);
+    fprintf(f, "bottom_dim=%d\n", pm3ds_cfg.bottom_dim);
     fprintf(f, "music_on=%d\n", pm3ds_cfg.music_on);
     fprintf(f, "sfx_on=%d\n", pm3ds_cfg.sfx_on);
     fprintf(f, "jukebox=%d\n", pm3ds_cfg.jukebox);

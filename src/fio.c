@@ -271,6 +271,12 @@ void fio_save_game(s32 saveSlot) {
     int i;
 #endif
 
+#ifdef _3DS
+    if (gGameStatusPtr->demoState != DEMO_STATE_NONE) {
+        return;   // 3DS port: never the title's demo (its file showed up as "error")
+    }
+#endif
+
     fio_fetch_saved_file_info();
 
     gGameStatusPtr->saveSlot = saveSlot;

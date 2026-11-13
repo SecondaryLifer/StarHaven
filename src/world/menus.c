@@ -247,12 +247,18 @@ void check_input_open_menus(void) {
         extern s32 pm3ds_player_in_room;
         s32 req = pm3ds_touch_req;
         extern bool pm3ds_autosave_due(void);
+        if (gGameStatusPtr->demoState != DEMO_STATE_NONE) {
+            // the title's demo plays in the world: an autosave there wrote the demo's
+            // file to slot 1 as "error" (Discord, 2026-11-06 and 11-12)
+            pm3ds_touch_req = 0;
+            req = -1;
+        }
         {   // Autosave (Settings): a quick save by itself, only where the Save button could save
             if (req == 0 && pm3ds_autosave_due()) {
                 req = 6;
             }
         }
-        if (req != 0) {
+        if (req > 0) {
             if (req != 6) {
                 pm3ds_touch_req = 0;
             }

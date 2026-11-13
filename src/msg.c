@@ -782,6 +782,18 @@ void msg_copy_to_print_buffer(MessagePrintState* printer, s32 arg1, s32 arg2) {
                         do {
                             printer->windowBasePos.x = *srcBuf++;
                             printer->windowBasePos.y = *srcBuf++;
+#ifdef _3DS
+                            // 3DS port: Fill/Wide open speech bubbles 7 lower (msg_draw.c); a choice
+                            // under one follows, or it hid the question's 4th line (Chuck Quizmo, #87)
+                            // (frameCounter is a u16 that wraps: compare the difference)
+                            extern u16 pm3ds_bubble_lowered_at;
+                            extern bool pm3ds_bubble_lowered;
+                            if (pm3ds_bubble_lowered &&
+                                (u16)(gGameStatusPtr->frameCounter - pm3ds_bubble_lowered_at) <= 2) {
+                                printer->windowBasePos.y += 7;
+                            }
+                            pm3ds_bubble_lowered = false;
+#endif
                             printer->windowSize.x = *srcBuf++;
                             printer->windowSize.y = *srcBuf++;
                             printer->windowState = MSG_WINDOW_STATE_OPENING;
@@ -1430,9 +1442,11 @@ void initialize_printer(MessagePrintState* printer, s32 arg1, s32 arg2) {
 #include "pm3ds_langpack.h"
 static void dma_load_msg_rom(u32 msgID, void* dest);
 void dma_load_msg(u32 msgID, void* dest) {
+    extern void pm3ds_msg_loaded(u32 msgID, void* dest, s32 cap);   /* journal.c */
     if (!pm3ds_langpack_msg(msgID, dest, 0x400)) {
         dma_load_msg_rom(msgID, dest);
     }
+    pm3ds_msg_loaded(msgID, dest, 0x400);
 }
 #define dma_load_msg dma_load_msg_rom
 #endif
@@ -1484,6 +1498,11 @@ void dma_load_msg(u32 msgID, void* dest) {
 #endif
 #ifdef _3DS
 #undef dma_load_msg
+#endif
+
+#ifdef _3DS
+u16 pm3ds_bubble_lowered_at;      /* msg_draw.c: the frame a lowered speech bubble was last drawn */
+bool pm3ds_bubble_lowered;        /* ...and that it still counts (a choice uses it once) */
 #endif
 
 s8* load_message_to_buffer(s32 msgID) {

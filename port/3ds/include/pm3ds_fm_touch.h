@@ -16,10 +16,10 @@ typedef struct {
     int state;       /* PM3DS_FMS_*, _FMC_* or _FMM_* by menu */
     int selected;    /* the file the menu's cursor is on, or -1 */
     bool has[4];
-    char name[4][9];
+    char name[4][40];   /* UI text: symbols as PM3DS_TXT_ESC code points */
     int level[4];
     int spirits[4];
-    char typed[9];   /* the name being entered */
+    char typed[40];  /* the name being entered */
     int cols, rows;  /* the keyboard's grid */
     int language;
 } pm3ds_fm_info_t;

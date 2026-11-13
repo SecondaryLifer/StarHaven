@@ -438,6 +438,15 @@ void filemenu_yesno_handle_input(MenuPanel* menu) {
                             }
                         }
 #endif
+#ifdef PM3DS_TEST_QUIZ   // debug builds only: 12 of Chuck Quizmo's questions done (GitHub #80)
+                        evt_set_variable(nullptr, GB_CompletedQuizzes, 12);
+                        gPlayerData.quizzesAnswered = 15;
+                        gPlayerData.quizzesCorrect = 12;
+#endif
+#ifdef PM3DS_TEST_GEAR   // debug builds only: Ultra Boots and Super Hammer (the Badges page's row, GitHub #79)
+                        gPlayerData.bootsLevel = 2;
+                        gPlayerData.hammerLevel = 1;
+#endif
 #ifdef PM3DS_START_INVENTORY
                         {   // debug builds only: something in every menu (items, badges, partners, coins)
                             static const s16 items[] = { ITEM_MUSHROOM, ITEM_SUPER_SHROOM, ITEM_FIRE_FLOWER,

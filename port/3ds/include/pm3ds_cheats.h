@@ -46,4 +46,10 @@ bool pm3ds_level99(void);
 
 void pm3ds_skip_intro_choose(bool on);   /* the new file starts after the prologue's fall */
 
+/* Boots and hammer (n64_shim/cheats.c, GitHub #79): wear any level already found.
+ * gear 0 boots, 1 hammer; levels 0 normal, 1 super, 2 ultra; -1 none */
+int pm3ds_gear_level(int gear);
+int pm3ds_gear_best(int gear);           /* the best one found on this save */
+bool pm3ds_gear_set(int gear, int level);   /* false: not now (battle, menus) or not found yet */
+
 #endif

@@ -30,7 +30,7 @@ void set_battle_formation(Battle* battle);
     defined(PM3DS_SHOP_TEST) || defined(PM3DS_FX_DUST) || defined(PM3DS_ENC_TEST) || defined(PM3DS_FX_LIST) || \
     defined(PM3DS_JOURNAL_TEST) || defined(PM3DS_NO_TITLE_DEMO) || defined(PM3DS_QUICKSAVE_EVERY) || \
     defined(PM3DS_SHOP_DIALOG) || defined(PM3DS_MODEL_DUMP) || defined(PM3DS_TOUR) || defined(PM3DS_AUTO_WIN) || defined(PM3DS_AUTO_LOSE) || \
-    defined(PM3DS_ENEMY_HP1) || defined(PM3DS_RANDO_TEST) || defined(PM3DS_FLAME_TEST) || defined(PM3DS_MUS_DBG) || defined(PM3DS_GOTO)
+    defined(PM3DS_ENEMY_HP1) || defined(PM3DS_RANDO_TEST) || defined(PM3DS_FLAME_TEST) || defined(PM3DS_MUS_DBG) || defined(PM3DS_GOTO) || defined(PM3DS_QUIZ_TEST) || defined(PM3DS_TEST_HARD) || defined(PM3DS_TEST_VIEW) || defined(PM3DS_TEST_GEAR) || defined(PM3DS_TEST_QUIZ)
 /* make_cia.sh refuses to publish a binary containing this string */
 __attribute__((used)) const char pm3ds_debug_build_marker[] = "PM3DS-DEBUG-BUILD";
 #endif
@@ -559,7 +559,40 @@ static void pm3ds_ro_check(u32 frame) {
 }
 #endif
 
+#ifdef PM3DS_QUIZ_TEST
+/* Debug: Chuck Quizmo's Lemon Candy question and its choices (GitHub #87), spoken by
+ * the partner; -DPM3DS_QUIZ_TEST=<view mode> */
+static EvtScript quiz_test_script = {
+    Call(SpeakToPlayer, NPC_PARTNER, -1, -1, 0, MESSAGE_ID(0x2C, 0x01E))
+    Call(ShowChoice, MESSAGE_ID(0x2D, 0x01E))
+    Return
+    End
+};
+#endif
+
 void pm3ds_game_debug_tick(u32 frame) {
+#ifdef PM3DS_TEST_VIEW   /* debug: a view mode (0 Original, 1 Fill, 2 Wide, 3 Sharp wide) in the world */
+    {
+        static s32 worldFrames;
+        if (gGameStatusPtr != nullptr && get_game_mode() == GAME_MODE_WORLD && ++worldFrames == 100) {
+            extern void pm3ds_set_view_mode(int mode);
+            pm3ds_set_view_mode(PM3DS_TEST_VIEW);
+        }
+    }
+#endif
+#ifdef PM3DS_QUIZ_TEST
+    {
+        static s32 worldFrames, started;
+        if (!started && gGameStatusPtr != nullptr && get_game_mode() == GAME_MODE_WORLD &&
+            gGameStatusPtr->demoState == 0 && ++worldFrames > 200) {
+            extern void pm3ds_set_view_mode(int mode);
+            started = 1;
+            pm3ds_set_view_mode(PM3DS_QUIZ_TEST);
+            start_script(&quiz_test_script, EVT_PRIORITY_1, 0);
+            pm3ds_log(2, "QUIZTEST view %d", PM3DS_QUIZ_TEST);
+        }
+    }
+#endif
 #if defined(PM3DS_START_MAP) || defined(PM3DS_MAP_SWEEP) || defined(PM3DS_DRAWLOG_FRAME) || \
     defined(PM3DS_RO_CHECK) || defined(PM3DS_MAGENTA_HUNT) || defined(PM3DS_OVERLAY_DBG) || \
     defined(PM3DS_TELEPORT_X) || defined(PM3DS_COLLIDER_CHECK) || defined(PM3DS_START_BARE) || \
@@ -568,7 +601,7 @@ void pm3ds_game_debug_tick(u32 frame) {
     defined(PM3DS_SHOP_TEST) || defined(PM3DS_FX_DUST) || defined(PM3DS_ENC_TEST) || defined(PM3DS_FX_LIST) || \
     defined(PM3DS_JOURNAL_TEST) || defined(PM3DS_NO_TITLE_DEMO) || defined(PM3DS_QUICKSAVE_EVERY) || \
     defined(PM3DS_SHOP_DIALOG) || defined(PM3DS_MODEL_DUMP) || defined(PM3DS_TOUR) || defined(PM3DS_AUTO_WIN) || defined(PM3DS_AUTO_LOSE) || \
-    defined(PM3DS_ENEMY_HP1) || defined(PM3DS_RANDO_TEST) || defined(PM3DS_FLAME_TEST) || defined(PM3DS_MUS_DBG) || defined(PM3DS_GOTO)
+    defined(PM3DS_ENEMY_HP1) || defined(PM3DS_RANDO_TEST) || defined(PM3DS_FLAME_TEST) || defined(PM3DS_MUS_DBG) || defined(PM3DS_GOTO) || defined(PM3DS_QUIZ_TEST) || defined(PM3DS_TEST_HARD) || defined(PM3DS_TEST_VIEW) || defined(PM3DS_TEST_GEAR) || defined(PM3DS_TEST_QUIZ)
     if (frame == 1) {
         pm3ds_log(2, "%s", pm3ds_debug_build_marker);   /* keeps the marker linked */
     }

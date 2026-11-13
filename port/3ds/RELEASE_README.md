@@ -83,11 +83,15 @@ The tabs run down the left side:
   counted; a randomizer file shows only the totals).
 - **Recipes**: every dish Tayce T. can cook, and how many you have had her cook. Dishes you
   haven't made yet show as *???* until you tap *Show all*. Tap a dish to see what it restores,
-  its description and every way to cook it (two ingredients need the Cookbook).
+  its description and every way to cook it (two ingredients need the Cookbook). Its
+  **Quizzes** page lists Chuck Quizmo's questions you have been asked, with the right answer
+  and how many you got right; tap one for the question and all three choices (*Spoilers*
+  shows the ones you haven't had yet).
 - **Save** on the Stats tab, tapped twice, saves the game wherever the pause menu could open.
   Loading puts you back on the spot on a map with a save block, and at the entrance you came
   in by anywhere else.
-- **Items** opens the item menu.
+- **Items** opens the item menu. **Badges** lists your badges: tap one to put it on or take it
+  off. Its bottom row picks the boots and hammer Mario wears, any level you have found so far.
 - In battle the side shows your HP, FP, Star Power and coins, next to the battle menus to tap
   or an A/B pad for action commands. Mario's commands are big tiles with the game's icons: Jump and Hammer along the
   bottom, Strategies, Items and Star Spirits above them. Every list shows each entry's icon.
@@ -104,6 +108,8 @@ The tabs run down the left side:
     of the game's text (see Language packs below).
   - **Screen**: *Original* (4:3), *Fill* or *Wide*.
   - **3D depth**: how deep the 3D slider goes, from *Low* to *Deepest*.
+  - **Bottom screen**: *Always on*, or *Off when idle*: the bottom screen's light goes off after
+    10 seconds without a touch, and a tap turns it back on.
   - **Frame rate**: 60 fps (in-between frames are added) or the original 30 fps. With the 3D
     slider up, 60 fps holds where there is time to draw both eyes twice and drops to 30
     elsewhere; battles stay at 30.

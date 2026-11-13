@@ -15,6 +15,7 @@
  * badge menu skips its BP check (src/pause/pause_badges.c).
  */
 #include "common.h"
+#include "game_modes.h"
 
 #include <string.h>
 
@@ -51,6 +52,37 @@ void pm3ds_hard_choose(bool on) {
  * 99 BP, the cheats' rules as a way to play, TTYD style. The save's tail is full, so it is a
  * second bit in the hard block's word: bit 0 hard, bit 1 this. */
 static bool sLevel99, sNextLevel99;
+
+/* Boots and hammer (GitHub #79): the best of each found, kept in the hard block's word
+ * as level + 1 (bits 2-3 boots, 4-5 hammer; 0 = not known yet, the worn one counts) */
+static s8 sBestBoots = -1, sBestHammer = -1;
+
+static void gear_track(void) {
+    if (gPlayerData.bootsLevel > sBestBoots) sBestBoots = gPlayerData.bootsLevel;
+    if (gPlayerData.hammerLevel > sBestHammer) sBestHammer = gPlayerData.hammerLevel;
+}
+
+int pm3ds_gear_level(int gear) {
+    return gear ? gPlayerData.hammerLevel : gPlayerData.bootsLevel;
+}
+
+int pm3ds_gear_best(int gear) {
+    gear_track();
+    return gear ? sBestHammer : sBestBoots;
+}
+
+bool pm3ds_gear_set(int gear, int level) {
+    // as the badges change: in the world, not in a battle or a menu
+    if (gGameStatusPtr == nullptr || get_game_mode() != GAME_MODE_WORLD || level < 0 || level > pm3ds_gear_best(gear)) {
+        return false;
+    }
+    if (gear) {
+        gPlayerData.hammerLevel = level;
+    } else {
+        gPlayerData.bootsLevel = level;
+    }
+    return true;
+}
 
 void pm3ds_level99_choose(bool on) {
     sNextLevel99 = on;
@@ -115,6 +147,7 @@ void pm3ds_cheats_off(void) {
     sOn = 0;
     sHard = false;
     sLevel99 = false;
+    sBestBoots = sBestHammer = -1;
 }
 
 /* src/filemenu/filemenu_yesno.c, new file: the picker's choice */
@@ -133,6 +166,21 @@ void pm3ds_cheats_new_game(void) {
 #endif
     sHard = sNextHard;
     sNextHard = false;
+#ifdef PM3DS_TEST_HARD
+    sHard = true;
+    evt_set_variable(nullptr, GB_FinalBowserHP, 140);   // past an s8: the phase 2 handoff
+    {   // the tattle text with hard-mode numbers
+        extern s32 bActorTattles[];
+        extern void pm3ds_log(int, const char*, ...);
+        void pm3ds_decode_msg(s32 msgID, char* out, s32 size, bool dialogue);
+        static char t[600];
+        static const s32 types[] = { ACTOR_TYPE_GOOMBA_KING, ACTOR_TYPE_GOOMBA, ACTOR_TYPE_FINAL_BOWSER_2 };
+        for (u32 i = 0; i < ARRAY_COUNT(types); i++) {
+            pm3ds_decode_msg(bActorTattles[types[i]], t, sizeof(t), true);
+            pm3ds_log(2, "HARDTEST tattle %d: %s", (int)types[i], t);
+        }
+    }
+#endif
     sLevel99 = sNextLevel99;
     sNextLevel99 = false;
 #ifdef PM3DS_TEST_L99
@@ -150,7 +198,9 @@ void pm3ds_cheats_new_game(void) {
 /* src/fio.c */
 void pm3ds_cheats_serialize(void* tail) {
     CheatSaveBlock b = { CHEAT_MAGIC, 1, sAllowed, (s32)sOn };
-    s32 hard[2] = { HARD_MAGIC, (sHard ? 1 : 0) | (sLevel99 ? 2 : 0) };
+    gear_track();
+    s32 hard[2] = { HARD_MAGIC, (sHard ? 1 : 0) | (sLevel99 ? 2 : 0) |
+                                ((sBestBoots + 1) & 3) << 2 | ((sBestHammer + 1) & 3) << 4 };
     memcpy((u8*)tail + CHEAT_BLOCK_OFS, &b, sizeof(b));
     memcpy((u8*)tail + HARD_BLOCK_OFS, hard, sizeof(hard));
 }
@@ -163,6 +213,10 @@ void pm3ds_cheats_deserialize(const void* tail) {
     pm3ds_cheats_off();
     sHard = hard[0] == HARD_MAGIC && (hard[1] & 1);
     sLevel99 = hard[0] == HARD_MAGIC && (hard[1] & 2);
+    if (hard[0] == HARD_MAGIC) {
+        sBestBoots = ((hard[1] >> 2) & 3) - 1;
+        sBestHammer = ((hard[1] >> 4) & 3) - 1;
+    }
     if (b.magic == CHEAT_MAGIC && b.version == 1 && b.allowed) {
         sAllowed = true;
         sOn = (u32)b.on & ((1u << PM3DS_CHEAT_COUNT) - 1);

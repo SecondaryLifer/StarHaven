@@ -79,6 +79,14 @@ static const s8 sFuncArgs[0x30] = {
 
 /* dialogue: a whole text box (tattles), whose style codes are skipped instead of
  * ending the text and whose pages run on as one paragraph */
+/* arguments after MSG_READ_FUNC f, -1 if unknown (journal.c) */
+s32 pm3ds_msg_func_args(u8 f) {
+    return f < ARRAY_COUNT(sFuncArgs) ? sFuncArgs[f] : -1;
+}
+
+static s16* sDecodeMap;   /* when set: raw index of each printable output char */
+static s32 sDecodeEnd;    /* raw index decoding stopped at */
+
 static void decode_msg_as(s32 msgID, char* out, s32 size, bool dialogue) {
     static u8 buf[2048];
     const u8* m;
@@ -145,9 +153,13 @@ static void decode_msg_as(s32 msgID, char* out, s32 size, bool dialogue) {
             out[n++] = (char)(0x80 | (cp & 0x7F));
 #endif
         } else if (c < 0xF0 && c + 0x20 < 0x100) {
+            if (sDecodeMap != nullptr) {
+                sDecodeMap[n] = i;
+            }
             out[n++] = (char)(c + 0x20);
         }
     }
+    sDecodeEnd = i;
     while (n > 0 && out[n - 1] == ' ') {
         n--;
     }
@@ -161,6 +173,98 @@ static void decode_msg(s32 msgID, char* out, s32 size) {
 /* for n64_shim/journal.c */
 void pm3ds_decode_msg(s32 msgID, char* out, s32 size, bool dialogue) {
     decode_msg_as(msgID, out, size, dialogue);
+}
+
+/* hard mode (Discord "Hard Mode: Goombario Stats"): a tattle's Max HP and
+ * Attack Power read the hard-mode values. m is a loaded message (cap bytes),
+ * rewritten in place; the labels are matched like the bottom screen's Log tab
+ * does, in every language. */
+/* key in text, ASCII letters in any case and spaces allowed before a colon ("Max Hp: 2",
+ * "Attack Power : 6" in some tattles); returns where the match ends, or nullptr */
+static const char* label_end(const char* text, const char* key) {
+    for (const char* t = text; *t; t++) {
+        const char* p = t;
+        const char* k = key;
+        while (*k) {
+            char a = *p, b = *k;
+            if (b == ':' || (u8)b == 0xEF) {   // ASCII colon (or a full-width one's UTF-8 lead)
+                while (*p == ' ') {
+                    p++;
+                }
+                a = *p;
+            }
+            if (a >= 'A' && a <= 'Z') a += 'a' - 'A';
+            if (b >= 'A' && b <= 'Z') b += 'a' - 'A';
+            if (a != b) {
+                break;
+            }
+            p++;
+            k++;
+        }
+        if (*k == '\0') {
+            return p;
+        }
+    }
+    return nullptr;
+}
+
+void pm3ds_hard_tattle_stats(u8* m, s32 cap) {
+    extern s32 pm3ds_hard_scale(s32 v);
+    static const char* const keys[2] = { "Max HP:", "Attack Power:" };
+    static char text[1024];
+    static s16 map[1024];
+
+    for (s32 k = 0; k < 2; k++) {
+        sDecodeMap = map;
+        decode_msg_as((s32)m, text, sizeof(text), true);
+        sDecodeMap = nullptr;
+        s32 end = sDecodeEnd;   // at the END byte
+        if (end >= cap || m[end] != MSG_CHAR_READ_END) {
+            return;
+        }
+        for (s32 lang = 0; lang < PM3DS_LANG_COUNT; lang++) {
+            char key[48];
+            pm3ds_lang_encode(pm3ds_lang_utf8(lang, keys[k]), key, sizeof(key));
+            const char* p = key[0] ? label_end(text, key) : nullptr;
+            if (p == nullptr) {
+                continue;
+            }
+            s32 ds = (s32)(p - text);
+            while (text[ds] == ' ') {
+                ds++;
+            }
+            s32 de = ds;
+            s32 value = 0;
+            while (text[de] >= '0' && text[de] <= '9' && de - ds < 4) {
+                value = value * 10 + (text[de] - '0');
+                de++;
+            }
+            if (de == ds) {
+                break;
+            }
+            s32 r0 = map[ds];
+            s32 r1 = map[de - 1] + 1;
+            if (r1 - r0 != de - ds) {
+                break;   // not one run of digit bytes
+            }
+            u8 digits[8];
+            s32 nd = 0;
+            s32 v = pm3ds_hard_scale(value);
+            do {
+                digits[nd++] = MSG_CHAR_DIGIT_0 + v % 10;
+                v /= 10;
+            } while (v > 0 && nd < 8);
+            s32 delta = nd - (r1 - r0);
+            if (end + 1 + delta > cap) {
+                break;
+            }
+            memmove(m + r1 + delta, m + r1, end + 1 - r1);
+            for (s32 d = 0; d < nd; d++) {
+                m[r0 + d] = digits[nd - 1 - d];
+            }
+            break;
+        }
+    }
 }
 
 /* decode only when the message changed: these run every frame */

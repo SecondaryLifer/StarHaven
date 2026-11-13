@@ -48,6 +48,7 @@ typedef struct {
     uint8_t autosave;     /* PM3DS_AUTOSAVE_*: quick save by itself (Discord suggestion) */
     bool battle_hud;      /* the top screen's HP/FP bar in battle (GitHub #75: the bottom screen shows them too) */
     bool ice_fx;          /* the Ice Power badge's snowflakes and sound on a hit (Discord suggestion) */
+    bool bottom_dim;      /* the bottom screen's light goes off in game when it isn't touched (GitHub #86) */
     bool dpad_menus;      /* the D-pad moves the cursor while a menu is open (Discord suggestion) */
     bool music_on;        /* Sound: the music (GitHub #78; a muted bus, so anything waiting on a song still runs) */
     bool sfx_on;          /* Sound: sound effects and ambience */

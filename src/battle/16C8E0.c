@@ -980,14 +980,44 @@ void btl_draw_enemy_health_bars(void) {
                         hud_element_set_render_pos(hid, screenX, screenY);
                         hud_element_draw_clipped(hid);
 
+#ifdef _3DS
+                        // 3DS port: hard mode bosses have 100+ HP; temp indexed past the
+                        // 10 digits (crash with the menu open, Discord report 2026-11-06)
+                        if (currentHP > 999) {
+                            currentHP = 999;
+                        }
+#ifdef PM3DS_TEST_HARD
+                        {
+                            static s32 logged = -1;
+                            if (logged != currentHP) {
+                                extern void pm3ds_log(int, const char*, ...);
+                                logged = currentHP;
+                                pm3ds_log(2, "HARDTEST hp bar %d/%d", currentHP, enemy->maxHP);
+                            }
+                        }
+#endif
+                        if (currentHP >= 100) {
+                            hid = HPBarHID;
+                            hud_element_set_render_depth(hid, 10);
+                            hud_element_set_script(hid, bHPDigitHudScripts[currentHP / 100]);
+                            btl_draw_prim_quad(0, 0, 0, 0, screenX - 6, screenY + 2, 8, 8);
+                            hud_element_set_render_pos(hid, screenX - 2, screenY + 6);
+                            hud_element_draw_next(hid);
+                        }
+                        temp = (currentHP / 10) % 10;
+                        if (currentHP >= 100 && temp == 0) {
+                            temp = -1;   // draw the 0 in 105
+                        }
+#else
                         temp = currentHP / 10;
+#endif
                         ones = currentHP % 10;
 
                         // tens digit
-                        if (temp > 0) {
+                        if (temp > 0 || temp < 0) {
                             hid = HPBarHID;
                             hud_element_set_render_depth(hid, 10);
-                            hud_element_set_script(hid, bHPDigitHudScripts[temp]);
+                            hud_element_set_script(hid, bHPDigitHudScripts[temp < 0 ? 0 : temp]);
                             btl_draw_prim_quad(0, 0, 0, 0, screenX, screenY + 2, 8, 8);
                             hud_element_set_render_pos(hid, screenX + 4, screenY + 6);
                             hud_element_draw_next(hid);

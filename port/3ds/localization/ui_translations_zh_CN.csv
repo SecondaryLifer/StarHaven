@@ -264,6 +264,19 @@ New game,pm3ds_lang_table.inc,A: choose  Y: cheats,A：选择  Y：金手指,新
 Settings,bottom_screen.c,Language,语言,iQue 固定中文；该选项仅供非 iQue 版本显示
 Settings,bottom_screen.c,Battle HP/FP bar,战斗 HP/FP 状态条,
 Settings,bottom_screen.c,Ice Power effect,寒冰勋章效果,
+Settings,bottom_screen.c,Bottom screen,下屏幕,new 2026-11-12 (machine draft)
+Settings,bottom_screen.c,Always on,常亮,new 2026-11-12 (machine draft)
+Settings,bottom_screen.c,Off when idle,闲置时关闭,new 2026-11-12 (machine draft)
+Badges,bottom_screen.c,Super,超级,new 2026-11-12 (machine draft)
+Badges,bottom_screen.c,Ultra,究极,new 2026-11-12 (machine draft)
+Badges,bottom_screen.c,Boots changed,已更换鞋子,new 2026-11-12 (machine draft)
+Badges,bottom_screen.c,Hammer changed,已更换锤子,new 2026-11-12 (machine draft)
+Recipes,bottom_screen.c,Quizzes,问答,new 2026-11-12 (machine draft)
+Recipes,bottom_screen.c,Spoilers,显示答案,new 2026-11-12 (machine draft)
+Recipes,bottom_screen.c,Question %d,第 %d 题,new 2026-11-12 (machine draft)
+Recipes,bottom_screen.c,Not asked yet,尚未出题,new 2026-11-12 (machine draft)
+Recipes,bottom_screen.c,Right,正确,new 2026-11-12 (machine draft)
+Recipes,bottom_screen.c,"%d of %d answered, %d right of %d",已答 %d/%d 题，答对 %d/%d 次,new 2026-11-12 (machine draft)
 Startup,bottom_screen.c,Low memory start: close and reopen the game,内存不足，无法启动：请关闭并重新打开游戏,
 Controls,pm3ds_settings.c,Turbo A,连发 A,手柄按键设置名称
 Update,bottom_screen.c,%s v%d.%d.%d is out.,%s v%d.%d.%d 已发布。,保留全部格式占位符

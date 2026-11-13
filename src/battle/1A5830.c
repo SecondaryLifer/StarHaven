@@ -2614,7 +2614,11 @@ API_CALLABLE(SetTargetActor) {
 API_CALLABLE(SetEnemyHP) {
     Bytecode* args = script->ptrReadPos;
     s32 actorID = evt_get_variable(script, *args++);
+#ifdef _3DS
+    s32 newHP;   // 3DS port: hard mode HP can pass 127
+#else
     s8 newHP;
+#endif
     Actor* actor;
 
     if (actorID == ACTOR_SELF) {
@@ -2628,6 +2632,9 @@ API_CALLABLE(SetEnemyHP) {
     if (newHP > actor->maxHP) {
         actor->curHP = actor->maxHP;
     }
+#ifdef PM3DS_TEST_HARD
+    { extern void pm3ds_log(int, const char*, ...); pm3ds_log(2, "HARDTEST SetEnemyHP %d -> %d/%d", (int)newHP, actor->curHP, actor->maxHP); }
+#endif
 
     actor->healthFraction = (actor->curHP * 25) / actor->maxHP;
 

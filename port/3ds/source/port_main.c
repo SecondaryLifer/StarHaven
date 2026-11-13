@@ -384,6 +384,7 @@ int main(void) {
     g_retrace_thread_run = 0;
     if (g_retrace_thread) threadJoin(g_retrace_thread, 100 * 1000 * 1000ULL);
     { extern void pm3ds_audio_close(void); pm3ds_audio_close(); }
+    { extern void pm3ds_bottom_screen_lcd_restore(void); pm3ds_bottom_screen_lcd_restore(); }
     pm3ds_gfx_present_shutdown();
     C3D_Fini();
     gfxExit();

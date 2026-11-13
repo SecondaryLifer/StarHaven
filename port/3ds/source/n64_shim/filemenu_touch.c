@@ -9,6 +9,7 @@
 #include "filemenu.h"
 #include "game_modes.h"
 #include "pm3ds_fm_touch.h"
+#include "pm3ds_lang.h"
 
 #include <string.h>
 
@@ -122,18 +123,40 @@ static char ascii_of(u8 c) {
     return 0;
 }
 
-static void name_of(char out[9], const u8* name) {
-    s32 last = -1;
+/* a file's name as UI text: the keyboard's symbols too (GitHub #85: ♪ ♥ ☆ ○ showed as ?) */
+static void name_of(char out[40], const u8* name) {
+    s32 n = 0, last = 0;
     s32 i;
 
     for (i = 0; i < 8; i++) {
-        char a = ascii_of(name[i]);
-        out[i] = a != 0 ? a : '?';
-        if (out[i] != ' ') {
-            last = i;
+        u8 c = name[i];
+        u32 cp = 0;
+        char a = ascii_of(c);
+        if (c == MSG_CHAR_NOTE) {
+            cp = 0x266A;
+        } else if (c == MSG_CHAR_HEART) {
+            cp = 0x2665;
+        } else if (c == MSG_CHAR_STAR) {
+            cp = 0x2606;
+        } else if (c == MSG_CHAR_CIRCLE) {
+            cp = 0x25CB;
+        } else if (a == 0 && c < 0x5F) {
+            a = (char)(c + 0x20);   // the font's ASCII order: ! " # ... ~
+        }
+        if (cp != 0) {
+            out[n++] = PM3DS_TXT_ESC;
+            out[n++] = (char)(0x80 | (cp >> 14));
+            out[n++] = (char)(0x80 | ((cp >> 7) & 0x7F));
+            out[n++] = (char)(0x80 | (cp & 0x7F));
+            last = n;
+        } else {
+            out[n++] = a != 0 ? a : '?';
+            if (out[n - 1] != ' ') {
+                last = n;
+            }
         }
     }
-    out[last + 1] = 0;
+    out[last] = 0;
 }
 
 void pm3ds_fm_query(pm3ds_fm_info_t* q) {

@@ -33,7 +33,7 @@ CSV = PORT / "localization" / "ui_translations_zh_CN.csv"
 TABLE = PORT / "source" / "platform" / "pm3ds_lang_table.inc"
 OUT_STR = PORT / "source" / "platform" / "pm3ds_lang_zh.inc"
 OUT_FONT = PORT / "source" / "platform" / "pm3ds_cjk_font.inc"
-EXTRA = "简体中文"                       # the language's own name (pm3ds_lang.c)
+EXTRA = "简体中文♪♥☆○"                   # the language's own name (pm3ds_lang.c); file-name symbols (GitHub #85)
 PLACEHOLDER = re.compile(r"%[-+ #0]*\d*(?:\.\d+)?[a-zA-Z]")
 
 
@@ -75,6 +75,9 @@ def translations():
 def chars_of(rows):
     cps = {ord(c) for _, zh in rows for c in zh if ord(c) >= 0x80}
     cps |= {ord(c) for c in EXTRA}
+    # Latin letters, digits and signs: a phrase with Chinese in it is drawn in this
+    # font all through (bottom_screen.c has_cjk, GitHub #85)
+    cps |= set(range(0x20, 0x7F))
     return sorted(cps)
 
 
