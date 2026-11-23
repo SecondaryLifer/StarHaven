@@ -262,7 +262,9 @@ static bool load_candidate(const char *path, rom_status_t *st) {
               (unsigned long long)ms, ms ? (double)n / 1048576.0 / ((double)ms / 1000.0) : 0.0,
               order == ORDER_Z64 ? "z64" : order == ORDER_V64 ? "v64" : "n64", (unsigned long)crc);
     if (s_want_crc && crc != s_want_crc) {
-        snprintf(st->reason, sizeof st->reason, "This is not the right ROM");
+        /* Paper Mario's header and size, other contents: a hack, a patched or a damaged
+         * copy (Discord: "was working until today") */
+        snprintf(st->reason, sizeof st->reason, "This ROM is changed or damaged");
         snprintf(st->detail, sizeof st->detail, "CRC32 %08lX, needs %08lX", (unsigned long)crc,
                  (unsigned long)s_want_crc);
         return false;

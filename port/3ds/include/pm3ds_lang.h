@@ -48,6 +48,10 @@ static inline uint32_t pm3ds_txt_next(const char *s, int *len) {
         *len = 4;
         return 0x80000000u | (uint32_t)(p[1] & 0x7F) << 14 | (uint32_t)(p[2] & 0x7F) << 7 | (p[3] & 0x7F);
     }
+    if (p[0] == PM3DS_TXT_ESC) {   /* cut short (a full buffer): a space, not its bytes as accented letters */
+        *len = p[1] ? (p[2] ? 3 : 2) : 1;
+        return ' ';
+    }
     *len = 1;
     return p[0];
 }

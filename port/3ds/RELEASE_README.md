@@ -74,7 +74,8 @@ The tabs run down the left side:
 - **Stats**: HP, FP, level, Star Points, coins, star pieces, Star Power and play time, and what
   the area you are in still hides: the star pieces, badges and hidden blocks and panels found
   there, and how many item spots the room you are standing in still holds.
-- **Map**: the world map, where you are and the area's counts. Drag it to look around.
+- **Map**: the world map, where you are and the area's counts. Drag it to look around, and tap a
+  place you've been to see what its area still hides.
 - **Party**: tap a partner to switch to them.
 - **Tattle**: every enemy Goombario has tattled so far. Tap one to read the whole tattle, with
   its HP, Attack and Defense on top.
@@ -109,7 +110,10 @@ The tabs run down the left side:
   - **Screen**: *Original* (4:3), *Fill* or *Wide*.
   - **3D depth**: how deep the 3D slider goes, from *Low* to *Deepest*.
   - **Bottom screen**: *Always on*, or *Off when idle*: the bottom screen's light goes off after
-    10 seconds without a touch, and a tap turns it back on.
+    10 seconds without a touch, and a tap turns it back on. Not on the original 2DS: its two
+    screens share one light.
+  - **Battle touch pad**: *Off* keeps the normal pages on the bottom screen in battle instead of
+    the big A and B buttons. The battle menus still show up as buttons.
   - **Frame rate**: 60 fps (in-between frames are added) or the original 30 fps. With the 3D
     slider up, 60 fps holds where there is time to draw both eyes twice and drops to 30
     elsewhere; battles stay at 30.
@@ -117,6 +121,8 @@ The tabs run down the left side:
   - **Fast-forward**: speed (2x to 4x), and whether the button is held or toggles.
   - **Steerable spin** and **Steerable jump**: the Circle Pad turns a spin dash or a jump while it
     happens. Off by default, so Mario moves as in the original.
+  - **Stuck? Back to the door**: if Mario is stuck in a wall or a scene never ends, tap *Go*, then
+    *Sure?*: the room loads again from the door Mario came in by.
   - **Music** and **Sound effects**: switch either off (sound effects includes the areas'
     background sounds).
   - **Jukebox**: pick a song that plays instead of the area's music. Battles keep their own.

@@ -21,6 +21,7 @@
 #include "message_ids.h"
 
 #include <string.h>
+#include <stdio.h>
 
 #include "pm3ds_hud_info.h"
 #include "pm3ds_rando.h"
@@ -304,6 +305,19 @@ static const struct { const char* prefix; const char* name; } sTrackedAreas[] = 
     { "pra", "Crystal Palace" },  { "kpa", "Bowser's Castle" },  { "kkj", "Peach's Castle" },
     { "hos", "Star Region" },     { "osr", "Castle Grounds" },
 };
+
+/* "Mt. Rugged (iwa_03)" for a map name: the randomizer's spoiler log listed bare map
+ * names, which players can't place (Discord) */
+const char* pm3ds_map_place(const char* map, char* buf, int size) {
+    for (u32 i = 0; i < ARRAY_COUNT(sTrackedAreas); i++) {
+        if (strncmp(map, sTrackedAreas[i].prefix, 3) == 0) {
+            snprintf(buf, size, "%s (%s)", sTrackedAreas[i].name, map);
+            return buf;
+        }
+    }
+    snprintf(buf, size, "%s", map);
+    return buf;
+}
 
 MapConfig* get_current_map_config(void);
 

@@ -319,8 +319,10 @@ static const char* item_name(s32 item) {
 }
 
 static u8 sMoveBP[], sMoveFP[];
+const char* pm3ds_map_place(const char* map, char* buf, int size);   /* journal.c */
+
 static void write_spoiler(void) {
-    char path[96];
+    char path[96], place[48];
     FILE* f;
     s32 i;
 
@@ -329,7 +331,7 @@ static void write_spoiler(void) {
     if (f == nullptr) {
         return;
     }
-    fprintf(f, "%s randomizer, seed %08lX\nShuffled: items, badges%s%s%s%s%s%s%s\n\n", PM3DS_APP_NAME,
+    fprintf(f, "%s randomizer, seed %08lX\nPlaces are the area and the game's name for the room (iwa_03 is a room of Mt. Rugged).\nShuffled: items, badges%s%s%s%s%s%s%s\n\n", PM3DS_APP_NAME,
             (unsigned long)sSeed, (sFlags & PM3DS_RANDO_COINS) ? ", coins, star pieces" : "",
             (sFlags & PM3DS_RANDO_KEYS) ? ", key items" : "",
             (sFlags & PM3DS_RANDO_KEYS) && (sFlags & PM3DS_RANDO_HIDDEN) ? " (hidden spots too)" : "",
@@ -339,21 +341,22 @@ static void write_spoiler(void) {
         fprintf(f, "Key items:\n");
         for (i = 0; i < NUM_LOCS; i++) {
             if (sItem[i] != sLocs[i].item && is_key(sItem[i])) {
-                fprintf(f, "  %-26s %-8s %s\n", item_name(sItem[i]), sLocs[i].map, s_src_names[sLocs[i].src]);
+                fprintf(f, "  %-26s %-32s %s\n", item_name(sItem[i]), pm3ds_map_place(sLocs[i].map, place, sizeof(place)),
+                        s_src_names[sLocs[i].src]);
             }
         }
         fprintf(f, "\nEverything:\n");
     }
     for (i = 0; i < NUM_LOCS; i++) {
         if (sItem[i] != sLocs[i].item) {
-            fprintf(f, "%-8s %-13s %-26s -> %s\n", sLocs[i].map, s_src_names[sLocs[i].src], sLocs[i].itemName + 5,
+            fprintf(f, "%-32s %-13s %-26s -> %s\n", pm3ds_map_place(sLocs[i].map, place, sizeof(place)), s_src_names[sLocs[i].src], sLocs[i].itemName + 5,
                     item_name(sItem[i]));
         }
     }
     fprintf(f, "\nShops:\n");
     for (i = 0; i < NUM_SHOPS; i++) {
         if (sShopItem[i] != sShops[i].item) {
-            fprintf(f, "%-8s %-13s %-26s -> %s\n", sShops[i].map, sShops[i].rowf ? "Rowf" : "shop",
+            fprintf(f, "%-32s %-13s %-26s -> %s\n", pm3ds_map_place(sShops[i].map, place, sizeof(place)), sShops[i].rowf ? "Rowf" : "shop",
                     item_name(sShops[i].item), item_name(sShopItem[i]));
         }
     }

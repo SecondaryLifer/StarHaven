@@ -59,6 +59,7 @@ TR("Nothing to find in this room", "Nichts in diesem Raum", "Rien dans cette pi�
 TR("This room: all found", "Raum: alles gefunden", "Pièce : tout trouvé", "Sala: todo hallado", "Stanza: tutto trovato", "この部屋：ぜんぶみつけた")
 TR("This room: %d of %d still here", "Raum: %d von %d noch da", "Pièce : %d sur %d restants", "Sala: quedan %d de %d", "Stanza: %d su %d restano", "この部屋：あと%d／%d")
 TR("Checked %d/%d", "Geprüft %d/%d", "Vu %d/%d", "Visto %d/%d", "Visti %d/%d", "チェック %d/%d")
+TR("Nothing to find", "Nichts zu finden", "Rien à trouver", "Nada que encontrar", "Niente da trovare", "なにもない")
 TR("Checked", "Geprüft", "Vu", "Visto", "Visti", "チェック")
 
 /* map */
@@ -146,7 +147,14 @@ TR("Not asked yet", "Noch nicht gefragt", "Pas encore posée", "Aún no pregunta
 TR("Right", "Richtig", "Juste", "Correcta", "Giusta", "せいかい")
 TR("%d of %d answered, %d right of %d", "%d von %d gelöst, %d von %d richtig", "%d sur %d résolues, %d justes sur %d", "%d de %d resueltas, %d de %d bien", "%d di %d risolte, %d giuste su %d", "%d/%d もん、せいかい %d/%d")
 TR("Bottom screen", "Unterer Bildschirm", "Écran du bas", "Pantalla inferior", "Schermo inferiore", "下の画面")
+TR("Battle touch pad", "Kampf-Touchpad", "Pavé tactile en combat", "Panel táctil en combate", "Pad touch in battaglia", "バトルのタッチパッド")
+TR("Stuck? Back to the door", "Fest? Zurück zur Tür", "Bloqué ? Retour à l'entrée", "¿Atascado? Volver a la entrada", "Bloccato? Torna all'ingresso", "うごけない？入口にもどる")
+TR("Go", "Los", "Go", "Ir", "Vai", "もどる")
+TR("Done", "Erledigt", "Fait", "Hecho", "Fatto", "もどった")
+TR("Can't now", "Gerade nicht", "Pas maintenant", "Ahora no", "Non ora", "いまはムリ")
+TR("In game", "Im Spiel", "En jeu", "En partida", "In gioco", "ゲーム中のみ")
 TR("Always on", "Immer an", "Toujours allumé", "Siempre encendida", "Sempre acceso", "つけたまま")
+TR("Always on (2DS)", "Immer an (2DS)", "Toujours allumé (2DS)", "Siempre encendida (2DS)", "Sempre acceso (2DS)", "つけたまま (2DS)")
 TR("Off when idle", "Aus, wenn unbenutzt", "Éteint si inactif", "Apagada si no se usa", "Spento se inattivo", "使わないと消す")
 TR("Low memory start: close and reopen the game", "Wenig Speicher: Spiel schließen und neu starten", "Peu de mémoire : fermez et relancez le jeu", "Poca memoria: cierra y reabre el juego", "Poca memoria: chiudi e riapri il gioco", "メモリ不足で起動: ゲームを再起動してください")
 TR("Music", "Musik", "Musique", "Música", "Musica", "BGM")
