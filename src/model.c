@@ -12,6 +12,10 @@
 #include "model_clear_render_tasks.h"
 #ifdef _3DS
 #include "pm3ds_gfx_tags.h"
+// 3DS port: T-junction repair of map model lists (port/3ds/source/n64_shim/tjunction.c)
+Gfx* pm3ds_tjunc_dl(ModelNode* node, Gfx* orig);
+void pm3ds_tjunc_clear(void);
+void pm3ds_tjunc_build(void);
 #endif
 #include "nu/nusys.h"
 
@@ -2005,7 +2009,12 @@ void appendGfx_model(void* data) {
     }
 #endif
     if (!(flags & MODEL_FLAG_HAS_LOCAL_VERTEX_COPY)) {
+#ifdef _3DS
+        // 3DS port: the same list with its T-junctions split (no cracks to the sky, tjunction.c)
+        gSPDisplayList((*gfxPos)++, pm3ds_tjunc_dl(modelNode, modelNode->displayData->displayList));
+#else
         gSPDisplayList((*gfxPos)++, modelNode->displayData->displayList);
+#endif
     }
 #ifdef _3DS
     if (decalBand) {
@@ -2406,6 +2415,9 @@ s32 mdl_get_child_count(ModelNode* model) {
 void clear_model_data(void) {
     s32 i;
 
+#ifdef _3DS
+    pm3ds_tjunc_clear();
+#endif
     if (gGameStatusPtr->context == CONTEXT_WORLD) {
         gCurrentModels = &wModelList;
         gCurrentTransformGroups = &wTransformGroups;
@@ -3397,6 +3409,9 @@ void load_data_for_models(ModelNode* rootModel, s32 texturesOffset, s32 size) {
 
     if (rootModel != nullptr) {
         load_model_transforms(rootModel, nullptr, mtx, 0);
+#ifdef _3DS
+        pm3ds_tjunc_build();
+#endif
     }
 }
 

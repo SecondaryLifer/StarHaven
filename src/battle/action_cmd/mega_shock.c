@@ -208,6 +208,13 @@ void N(update)(void) {
             }
 
             buttonsAB = BUTTON_A | BUTTON_B;
+#ifdef PM3DS_MEGA_DBG
+            if (buttonsPushed & buttonsAB) {   // debug: what the meter sees (GitHub #64)
+                extern void pm3ds_log(int, const char*, ...);
+                pm3ds_log(2, "MEGADBG pushed %X fill %d chance %d diff %d timer %d", buttonsPushed & buttonsAB,
+                          acs->meterFillLevel, acs->statusChance, acs->difficulty, acs->stateTimer);
+            }
+#endif
             if ((buttonsPushed & buttonsAB) == buttonsAB) {
                 if (acs->statusChance != 0) {
                     s32 amt;

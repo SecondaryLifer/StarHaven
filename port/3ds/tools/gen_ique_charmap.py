@@ -27,6 +27,10 @@ OUT = PORT / "source" / "n64_shim" / "ique_charmap.inc"
 
 MULTIBYTE_FIRST, MULTIBYTE_LAST, ZH_START = 0x5F, 0x8F, 0xA6   # include/enums.h
 GLYPHS = 0x4F000 // 0x80                                        # charset/standard.dat
+# pm_msg.py names the full-width quote glyphs after the ornaments they look like;
+# the text means the quotation marks, which the bottom screen's pixel font has
+# (it has no ornaments: they were boxes there, GitHub #91)
+SAME_AS = {"\u275d": "\u201c", "\u275e": "\u201d"}                # ❝ ❞ -> “ ”
 
 
 def charset_ique():
@@ -46,6 +50,7 @@ def main():
         lead = ast.literal_eval(key)
         for tkey, tval in zip(val.keys, val.values):
             trail, ch = ast.literal_eval(tkey), ast.literal_eval(tval)
+            ch = SAME_AS.get(ch, ch)
             if not isinstance(ch, str) or len(ch) != 1:
                 continue
             glyph = (ZH_START - MULTIBYTE_FIRST) + lead + (trail - 1) * (MULTIBYTE_LAST - MULTIBYTE_FIRST + 1)

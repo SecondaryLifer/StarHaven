@@ -564,6 +564,9 @@ void gfx_combiner_apply(const gfx_state_t *st, bool two_cycle, gfx_cc_info_t *in
     }
     const cc_result_t *r = &s_cc[slot].res;
     *info = r->info;
+#ifdef PM3DS_NO_STATE_CACHE   /* debug A/B (hardware-only flicker): all six stages every time */
+    s_applied_valid = false;
+#endif
     for (int i = 0; i < 6; i++) {
         if (s_applied_valid && !memcmp(&s_applied[i], &r->env[i], sizeof r->env[i])) continue;
         *C3D_GetTexEnv(i) = r->env[i];

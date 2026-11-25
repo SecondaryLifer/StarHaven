@@ -16,3 +16,6 @@ Third-party parts:
 - cia/banner.cgfx, the 3D HOME Menu banner, by Velvii (https://github.com/Velvii),
   used with permission. Its title texture uses the Hey Gorgeous font (ffonts.net),
   which is free for personal, non-commercial use.
+- source/platform/qrcodegen.c and qrcodegen.h, the QR Code generator library by
+  Project Nayuki (https://www.nayuki.io/page/qr-code-generator-library), under the
+  MIT License (its text is at the top of qrcodegen.c).

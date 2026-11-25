@@ -111,6 +111,7 @@ void step_game_loop(void) {
         pm3ds_sound_step();    // Settings > Sound (jukebox.c)
         pm3ds_cheats_step();
         pm3ds_qs_step();       // a quick save loads where Mario stood (quicksave.c)
+        { extern void pm3ds_ach_step(void); pm3ds_ach_step(); }   // achievements (achievements.c)
     }
 #endif
     mdl_reset_transform_flags();

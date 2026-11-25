@@ -57,6 +57,7 @@ extern int osSendMesg(struct OSMesgQueue *mq, void *msg, int mode);
 static FILE *g_save;   /* kept open for write-through */
 #ifndef PM3DS_HOST_TEST
 static void flash_import(void);
+static void backup_at_boot(void);
 #endif
 
 static void flash_lazy_init(void) {
@@ -79,6 +80,7 @@ static void flash_lazy_init(void) {
         pm3ds_log(PM3DS_LOG_INFO, "os_flash: new save file %s", g_save ? "created" : "UNAVAILABLE (in-memory only)");
     }
     if (g_save) flash_import();
+    if (g_save) backup_at_boot();
 #endif
 }
 
@@ -340,5 +342,157 @@ static void flash_import(void) {
         free(img);
         return;
     }
+}
+#endif
+
+/* ---- dated backups and older copies (Settings > Restore an older save) ------
+ * At boot the save is copied to <SD folder>/backup/<save name>_NNNNNN_YYYYMMDD-HHMMSS.fla
+ * (NNNNNN counts up, so the order never depends on the console's clock)
+ * (unless the newest backup already holds the same bytes) and only the last
+ * BACKUP_KEEP of this version's are kept. n64_shim/save_rescue.c lists them and
+ * the older copies the save itself still holds, and writes one back. */
+#ifndef PM3DS_HOST_TEST
+#include <dirent.h>
+#include <time.h>
+
+#define BACKUP_DIR  FLASH_SAVE_DIR "/backup"
+#define BACKUP_KEEP 3
+#define BACKUP_MAX  16
+
+#define BACKUP_SCAN 64
+static char s_backups[BACKUP_SCAN][48];   /* this version's backups, newest first */
+static int s_nbackups = -1;
+static int s_nall;   /* all of this version's backups found (up to BACKUP_SCAN); s_nbackups <= BACKUP_MAX of them are listed */
+
+/* "save" for save.fla: backups are <base>_<date>.fla */
+static size_t backup_base_len(void) {
+    const char *dot = strrchr(PM3DS_SAVE_NAME, '.');
+    return dot ? (size_t)(dot - PM3DS_SAVE_NAME) : strlen(PM3DS_SAVE_NAME);
+}
+
+/* one of this version's backups: <base>_ then a digit (save_us_... is not save.fla's) */
+static int is_our_backup(const char *name) {
+    size_t n = backup_base_len(), len = strlen(name);
+    return len > n + 5 && len < sizeof(s_backups[0]) && !strncmp(name, PM3DS_SAVE_NAME, n) && name[n] == '_'
+        && name[n + 1] >= '0' && name[n + 1] <= '9' && !strcmp(name + len - 4, ".fla");
+}
+
+/* the counter after <base>_: exactly 6 digits then '_'; 0 for anything else */
+static long backup_seq(const char *name) {
+    const char *p = name + backup_base_len() + 1;
+    long v = 0;
+    for (int i = 0; i < 6; i++) {
+        if (p[i] < '0' || p[i] > '9') return 0;
+        v = v * 10 + (p[i] - '0');
+    }
+    return p[6] == '_' ? v : 0;
+}
+
+static int backup_cmp(const void *a, const void *b) {
+    long sa = backup_seq((const char *)a), sb = backup_seq((const char *)b);
+    if (sa != sb) return sa < sb ? 1 : -1;            /* newest (highest counter) first */
+    return strcmp((const char *)b, (const char *)a);
+}
+
+static void backup_scan(void) {
+    DIR *d = opendir(BACKUP_DIR);
+    struct dirent *e;
+    s_nbackups = 0;
+    if (!d) return;
+    while ((e = readdir(d)) != NULL && s_nbackups < BACKUP_SCAN) {
+        if (is_our_backup(e->d_name)) snprintf(s_backups[s_nbackups++], sizeof(s_backups[0]), "%s", e->d_name);
+    }
+    closedir(d);
+    qsort(s_backups, s_nbackups, sizeof(s_backups[0]), backup_cmp);
+    s_nall = s_nbackups;
+    if (s_nbackups > BACKUP_MAX) s_nbackups = BACKUP_MAX;   /* the list shows the newest */
+}
+
+int pm3ds_backup_count(void) {
+    if (s_nbackups < 0) backup_scan();
+    return s_nbackups;
+}
+
+const char *pm3ds_backup_name(int i) {
+    return i >= 0 && i < pm3ds_backup_count() ? s_backups[i] : "";
+}
+
+/* backup i's whole image into img (PM3DS_FLASH_SIZE bytes); 0 if it can't be read */
+int pm3ds_backup_read(int i, uint8_t *img) {
+    char path[96];
+    FILE *f;
+    size_t got;
+    if (i < 0 || i >= pm3ds_backup_count()) return 0;
+    snprintf(path, sizeof(path), BACKUP_DIR "/%s", s_backups[i]);
+    if (!(f = fopen(path, "rb"))) return 0;
+    got = fread(img, 1, PM3DS_FLASH_SIZE, f);
+    fclose(f);
+    if (got < PM3DS_FLASH_SIZE) memset(img + got, 0xFF, PM3DS_FLASH_SIZE - got);
+    return got > 0;
+}
+
+/* a dated copy of the save as it is now; nothing if the newest backup has the same
+ * bytes, or nothing was ever saved. 1: the save is backed up */
+int pm3ds_backup_now(void) {
+    char path[96], name[48];
+    int i, same = 0;
+    FILE *f;
+    for (i = 0; i < PM3DS_FLASH_SIZE && g_flash[i] == 0xFF; i++) {}
+    if (i == PM3DS_FLASH_SIZE) return 1;
+    mkdir(BACKUP_DIR, 0777);
+    backup_scan();
+    if (s_nbackups > 0) {
+        uint8_t *img = malloc(PM3DS_FLASH_SIZE);
+        if (img && pm3ds_backup_read(0, img)) same = memcmp(img, g_flash, PM3DS_FLASH_SIZE) == 0;
+        free(img);
+        if (same) return 1;
+    }
+    {
+        long seq = s_nbackups > 0 ? backup_seq(s_backups[0]) + 1 : 1;
+        time_t now = time(NULL);
+        struct tm *t = gmtime(&now);   /* the console's clock, as set (no time zones on a 3DS) */
+        if (seq > 999999) seq = 999999;
+        snprintf(name, sizeof(name), "%.*s_%06ld_%04d%02d%02d-%02d%02d%02d.fla", (int)backup_base_len(), PM3DS_SAVE_NAME,
+                 seq, t ? t->tm_year + 1900 : 2000, t ? t->tm_mon + 1 : 1, t ? t->tm_mday : 1,
+                 t ? t->tm_hour : 0, t ? t->tm_min : 0, t ? t->tm_sec : 0);
+    }
+    snprintf(path, sizeof(path), BACKUP_DIR "/%s", name);
+    if (!(f = fopen(path, "wb"))) return 0;
+    size_t put = fwrite(g_flash, 1, sizeof(g_flash), f);
+    if (fclose(f) != 0 || put != sizeof(g_flash)) {
+        remove(path);   /* a full SD card: no half backup that would push a good one out */
+        backup_scan();
+        return 0;
+    }
+    pm3ds_log(PM3DS_LOG_INFO, "os_flash: backup %s", name);
+    backup_scan();
+    return 1;
+}
+
+static void backup_at_boot(void) {
+    if (!pm3ds_backup_now()) return;   /* none written: keep the older ones as they are */
+    /* oldest first; the one just written has the highest counter, so it is never removed */
+    while (s_nall > BACKUP_KEEP) {
+        char path[96];
+        snprintf(path, sizeof(path), BACKUP_DIR "/%s", s_backups[--s_nall]);
+        remove(path);
+        pm3ds_log(PM3DS_LOG_INFO, "os_flash: removed old backup %s", s_backups[s_nall]);
+    }
+    if (s_nbackups > s_nall) s_nbackups = s_nall;
+}
+
+/* the save's bytes (n64_shim/save_rescue.c reads the older copies from it) */
+const uint8_t *pm3ds_flash_image(void) {
+    flash_lazy_init();
+    return g_flash;
+}
+
+/* a save page written back: its 16 KB sector erased, then len bytes of block */
+void pm3ds_flash_write_block(int page, const void *block, uint32_t len) {
+    flash_lazy_init();
+    if (page < 0 || page >= NUM_BLOCKS || len > BLOCK_STRIDE) return;
+    memset(g_flash + page * BLOCK_STRIDE, 0xFF, BLOCK_STRIDE);
+    memcpy(g_flash + page * BLOCK_STRIDE, block, len);
+    flash_persist(page * BLOCK_STRIDE, BLOCK_STRIDE);
 }
 #endif

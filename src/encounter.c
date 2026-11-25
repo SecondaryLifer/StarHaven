@@ -1278,6 +1278,14 @@ void update_encounters_pre_battle(void) {
             currentEncounter->fadeOutAmount = 0;
             currentEncounter->substateDelay = 1;
             currentEncounter->fadeOutAccel = 1;
+#ifdef _3DS
+            {   // 3DS port: a retried fight (n64_shim/retry_battle.c) starts from the black screen it lost on
+                extern bool pm3ds_retry_restarting;
+                if (pm3ds_retry_restarting) {
+                    currentEncounter->fadeOutAmount = 255;
+                }
+            }
+#endif
             currentEncounter->unk_08 = -1;
             HasPreBattleSongPushed = false;
             D_80077C40 = false;
@@ -1450,6 +1458,12 @@ void update_encounters_pre_battle(void) {
             currentEncounter->fadeOutAccel = 0;
             currentEncounter->fadeOutAmount = 255;
             set_screen_overlay_params_front(OVERLAY_SCREEN_COLOR, 255.0f);
+#ifdef _3DS
+            {   // 3DS port: what this fight starts from, for Retry battle (n64_shim/retry_battle.c)
+                extern void pm3ds_retry_snapshot(void);
+                pm3ds_retry_snapshot();
+            }
+#endif
 
             // prepare to resume after battle
             gEncounterState = ENCOUNTER_STATE_POST_BATTLE;
@@ -1667,6 +1681,18 @@ void update_encounters_post_battle(void) {
             ) {
                 set_action_state(ACTION_STATE_IDLE);
             }
+#ifdef _3DS
+            {   // 3DS port: Retry battle was chosen on a lost fight (n64_shim/retry_battle.c): the
+                // state it began with is back, and the same encounter starts again
+                extern bool pm3ds_retry_take(void);
+                if (pm3ds_retry_take()) {
+                    gEncounterState = ENCOUNTER_STATE_PRE_BATTLE;
+                    EncounterStateChanged = true;
+                    gEncounterSubState = ENCOUNTER_SUBSTATE_PRE_BATTLE_INIT;
+                    break;
+                }
+            }
+#endif
             switch (currentEncounter->battleOutcome) {
                 case OUTCOME_PLAYER_WON:
                     gEncounterSubState = ENCOUNTER_SUBSTATE_POST_BATTLE_WON_CHECK_MERLEE;

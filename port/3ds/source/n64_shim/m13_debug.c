@@ -30,7 +30,7 @@ void set_battle_formation(Battle* battle);
     defined(PM3DS_SHOP_TEST) || defined(PM3DS_FX_DUST) || defined(PM3DS_ENC_TEST) || defined(PM3DS_FX_LIST) || \
     defined(PM3DS_JOURNAL_TEST) || defined(PM3DS_NO_TITLE_DEMO) || defined(PM3DS_QUICKSAVE_EVERY) || \
     defined(PM3DS_SHOP_DIALOG) || defined(PM3DS_MODEL_DUMP) || defined(PM3DS_TOUR) || defined(PM3DS_AUTO_WIN) || defined(PM3DS_AUTO_LOSE) || \
-    defined(PM3DS_ENEMY_HP1) || defined(PM3DS_RANDO_TEST) || defined(PM3DS_FLAME_TEST) || defined(PM3DS_MUS_DBG) || defined(PM3DS_GOTO) || defined(PM3DS_QUIZ_TEST) || defined(PM3DS_TEST_HARD) || defined(PM3DS_TEST_VIEW) || defined(PM3DS_TEST_GEAR) || defined(PM3DS_TEST_QUIZ)
+    defined(PM3DS_ENEMY_HP1) || defined(PM3DS_RANDO_TEST) || defined(PM3DS_FLAME_TEST) || defined(PM3DS_MUS_DBG) || defined(PM3DS_GOTO) || defined(PM3DS_QUIZ_TEST) || defined(PM3DS_TEST_HARD) || defined(PM3DS_TEST_VIEW) || defined(PM3DS_TEST_GEAR) || defined(PM3DS_TEST_QUIZ) || defined(PM3DS_TEST_PANIC)
 /* make_cia.sh refuses to publish a binary containing this string */
 __attribute__((used)) const char pm3ds_debug_build_marker[] = "PM3DS-DEBUG-BUILD";
 #endif
@@ -397,6 +397,20 @@ static void pm3ds_auto_lose_tick(void) {
         return;
     }
     if (++timer == PM3DS_AUTO_LOSE) {
+#ifdef PM3DS_AUTO_LOSE_MAX
+        /* Retry battle test: the first PM3DS_AUTO_LOSE_MAX fights are lost after "using" FP and
+         * the first item (the retry must give them back), the next one is won */
+        static s32 lost;
+        if (lost >= PM3DS_AUTO_LOSE_MAX) {
+            pm3ds_log(2, "AUTOLOSE win now (after %d losses) hp %d fp %d item0 %d", (int)lost, gPlayerData.curHP,
+                      gPlayerData.curFP, gPlayerData.invItems[0]);
+            btl_set_state(BATTLE_STATE_VICTORY);
+            return;
+        }
+        lost++;
+        gPlayerData.curFP = 0;
+        gPlayerData.invItems[0] = ITEM_NONE;
+#endif
         pm3ds_log(2, "AUTOLOSE state=%d", (int)gBattleState);
         btl_set_state(BATTLE_STATE_DEFEAT);
     }
@@ -570,7 +584,31 @@ static EvtScript quiz_test_script = {
 };
 #endif
 
+#ifdef PM3DS_TEST_PANIC
+/* Debug: the crash screen and its QR code (pm3ds_panic.c), a few calls deep */
+#include "pm3ds_panic.h"
+__attribute__((noinline)) void pm3ds_test_panic(s32 n) {
+    if (n < 0) {
+        return;
+    }
+    if (n > 0) {
+        pm3ds_test_panic(n - 1);
+        __asm__ volatile("");   /* not a tail call: each level keeps its frame */
+    } else {
+        pm3ds_panic("PM3DS_TEST_PANIC: a crash on purpose (debug build)");
+    }
+}
+#endif
+
 void pm3ds_game_debug_tick(u32 frame) {
+#ifdef PM3DS_TEST_PANIC   /* debug: crash two seconds into the world */
+    {
+        static s32 worldFrames;
+        if (gGameStatusPtr != nullptr && get_game_mode() == GAME_MODE_WORLD && ++worldFrames == 120) {
+            pm3ds_test_panic(3);
+        }
+    }
+#endif
 #ifdef PM3DS_TEST_VIEW   /* debug: a view mode (0 Original, 1 Fill, 2 Wide, 3 Sharp wide) in the world */
     {
         static s32 worldFrames;
@@ -601,7 +639,7 @@ void pm3ds_game_debug_tick(u32 frame) {
     defined(PM3DS_SHOP_TEST) || defined(PM3DS_FX_DUST) || defined(PM3DS_ENC_TEST) || defined(PM3DS_FX_LIST) || \
     defined(PM3DS_JOURNAL_TEST) || defined(PM3DS_NO_TITLE_DEMO) || defined(PM3DS_QUICKSAVE_EVERY) || \
     defined(PM3DS_SHOP_DIALOG) || defined(PM3DS_MODEL_DUMP) || defined(PM3DS_TOUR) || defined(PM3DS_AUTO_WIN) || defined(PM3DS_AUTO_LOSE) || \
-    defined(PM3DS_ENEMY_HP1) || defined(PM3DS_RANDO_TEST) || defined(PM3DS_FLAME_TEST) || defined(PM3DS_MUS_DBG) || defined(PM3DS_GOTO) || defined(PM3DS_QUIZ_TEST) || defined(PM3DS_TEST_HARD) || defined(PM3DS_TEST_VIEW) || defined(PM3DS_TEST_GEAR) || defined(PM3DS_TEST_QUIZ)
+    defined(PM3DS_ENEMY_HP1) || defined(PM3DS_RANDO_TEST) || defined(PM3DS_FLAME_TEST) || defined(PM3DS_MUS_DBG) || defined(PM3DS_GOTO) || defined(PM3DS_QUIZ_TEST) || defined(PM3DS_TEST_HARD) || defined(PM3DS_TEST_VIEW) || defined(PM3DS_TEST_GEAR) || defined(PM3DS_TEST_QUIZ) || defined(PM3DS_TEST_PANIC)
     if (frame == 1) {
         pm3ds_log(2, "%s", pm3ds_debug_build_marker);   /* keeps the marker linked */
     }

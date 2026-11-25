@@ -62,10 +62,15 @@ Your saves are on the SD card and are kept.
 | ZL (hold) | Turbo A: presses A over and over, for mashing |
 | D-Pad, C-Stick | C buttons |
 | ZR (hold) | Fast-forward |
+| Select + R | Screenshot of both screens |
 
 Every button can be changed under **Options → Controls** (Turbo A can go on any button; earlier
 versions' saved controls keep ZL as C-Left until you change it there). The 3D slider works (not on the
 original 3DS and 2DS).
+
+**Screenshots:** hold Select and press R. Both screens are saved as PNG files in
+`/3ds/StarHaven/screenshots/` (named by the date and time, `_top.png` and `_bottom.png`), and the
+bottom screen says *Screenshot saved*. While Select is held, R does nothing in the game.
 
 ## Bottom screen
 
@@ -87,7 +92,21 @@ The tabs run down the left side:
   its description and every way to cook it (two ingredients need the Cookbook). Its
   **Quizzes** page lists Chuck Quizmo's questions you have been asked, with the right answer
   and how many you got right; tap one for the question and all three choices (*Spoilers*
-  shows the ones you haven't had yet).
+  shows the ones you haven't had yet). The chip under the pages' arrows steps through
+  Recipes, Quizzes, Letters and Achievements:
+  - **Letters**: Parakarry's 25 letters (who each is for, who sent it, delivered or still in
+    your bag), then Koopa Koot's 20 favors (done, in progress, gave up or not yet). Ones you
+    haven't found or been asked yet show as *???* until you tap *Show all*.
+  - **Achievements**: 40 of them (GitHub #88): each chapter's Star Spirit, the party and gear,
+    collections (star pieces, badges, recipes, tattles, letters, Koopa Koot, Chuck Quizmo,
+    Merlow), and challenges like winning a battle in Peril or beating a chapter boss with no
+    badges on. Secret ones show as *???* until earned. A notice pops up on the bottom screen
+    when you earn one (tap it to see the list). A save from an older version gets what it
+    already proves (the story so far, collections) when you load it. The challenges don't
+    count while a cheat is switched on. They are kept in the save file, and an older Star
+    Haven keeps them when it saves.
+- **Show hint** on the Map tab: a short hint about where to go next in the story, for when you
+  come back to a save after a while. It stays hidden until you tap it.
 - **Save** on the Stats tab, tapped twice, saves the game wherever the pause menu could open.
   Loading puts you back on the spot on a map with a save block, and at the entrance you came
   in by anywhere else.
@@ -105,6 +124,8 @@ The tabs run down the left side:
 - **Options** (with its own tabs: Settings, Controls, Cheats on a cheat file, Debug):
   - **Language**: the bottom screen's own text in English, Deutsch, Français, Español, Italiano,
     日本語 or 简体中文 (Simplified Chinese).
+  - **Bigger text**: the bottom screen's lists, buttons and longer texts (tattles, quiz questions,
+    dish descriptions) in a larger size, as far as each row has room. Off by default.
   - **Game text**: *Original* (your ROM's) or a language pack on the SD card, a fan translation
     of the game's text (see Language packs below).
   - **Screen**: *Original* (4:3), *Fill* or *Wide*.
@@ -113,14 +134,19 @@ The tabs run down the left side:
     10 seconds without a touch, and a tap turns it back on. Not on the original 2DS: its two
     screens share one light.
   - **Battle touch pad**: *Off* keeps the normal pages on the bottom screen in battle instead of
-    the big A and B buttons. The battle menus still show up as buttons.
+    the big A and B buttons. The battle menus still show up as buttons. For Mega Shock and
+    Hurricane, which want A and B pressed together, either pad button presses both.
   - **Frame rate**: 60 fps (in-between frames are added) or the original 30 fps. With the 3D
     slider up, 60 fps holds where there is time to draw both eyes twice and drops to 30
     elsewhere; battles stay at 30.
-  - **Text speed**: Normal, Fast or Instant.
+  - **Text speed**: Normal, Fast or Instant (each page of a message appears at once; A still
+    turns the page).
   - **Fast-forward**: speed (2x to 4x), and whether the button is held or toggles.
   - **Steerable spin** and **Steerable jump**: the Circle Pad turns a spin dash or a jump while it
     happens. Off by default, so Mario moves as in the original.
+  - **Retry battle** (on by default): when Mario loses a fight that would end in a Game Over,
+    you can pick *Retry battle* (A) to fight it again from its start, with the HP, FP, items
+    and Star Power you had when it began, or *Game over* (B) as usual.
   - **Stuck? Back to the door**: if Mario is stuck in a wall or a scene never ends, tap *Go*, then
     *Sure?*: the room loads again from the door Mario came in by.
   - **Music** and **Sound effects**: switch either off (sound effects includes the areas'
@@ -131,6 +157,10 @@ The tabs run down the left side:
   - **Check at launch**: the same question when Star Haven starts. A newer version shows a
     notice on the bottom screen (*Skip* stops the launch check mentioning that version). It
     downloads and installs nothing. Off here, from the next start.
+  - **Restore an older save**: lists the older copies your save file still holds (the game
+    keeps the previous copy of each file until two more saves are made) and the backups from
+    your last starts, with each file's name, level and time played. Pick one and tap
+    *Restore*, then *Sure?*: it becomes that file's newest save (your save is backed up first).
   - **Controls** tab: remap any button.
 
 Settings are remembered.
@@ -146,13 +176,21 @@ When you pick an empty file, Star Haven asks how you want to play:
   - key items, which always land somewhere you can reach before you need them,
   - shop stock,
   - gifts from characters,
-  - key items into hidden panels and hidden blocks (hard to find without the spoiler log).
+  - key items into hidden panels and hidden blocks (hard to find without the spoiler log),
+  - doors (**Door shuffle: In each area**): a path out of a room leads to another room of the
+    same area, and going back the way you came takes you back. For now this is Goomba Road,
+    Toad Town, Koopa Village with Pleasant Path's crossroads, and Dry Dry Desert; doors the
+    story needs in place (the prologue's Goomba Village, boss rooms, the bridges you build,
+    Koopa Bros. Fortress) stay as they are, so every room opens at the same point of the
+    story as before.
 
   Leave the **Seed** on *Random*, or type one in to replay or share a game: the same seed
   with the same settings gives the same game.
 
 Each randomized game writes a spoiler log to `/3ds/StarHaven/spoiler_<seed>.txt` listing
-where everything went. The seed is shown on the Stats tab.
+where everything went (with door shuffle, where each door leads: "door 2" is the room's
+entrance number 2, and the log says where that door used to go). The seed is shown on the
+Stats tab.
 
 ## Cheats
 
@@ -210,10 +248,13 @@ explains how to make one from `.msg` files with `tools/make_langpack.py`.
 | your ROM | any name, e.g. `Paper Mario (USA).z64` |
 | `save.fla` | your save files (`save_us.fla` with the US version, `save_ique.fla` with the iQue one) |
 | `save.fla.bak` | your saves from before an N64 save import |
+| `backup/save_<number>_<date>.fla` | copies of your save from the last 3 starts (Settings > Restore an older save) |
 | `import.fla`, `import.srm` | an N64 save to import at the next start (see above) |
+| `save.fla.ach` | achievements earned since the last save (the game doesn't save after the last battle) |
 | `port.cfg` | settings |
 | `spoiler_<seed>.txt` | randomizer spoiler logs |
 | `log.txt` | warnings, useful in bug reports |
+| `screenshots/` | screenshots (Select + R) |
 | `lang/<name>/messages.bin` | language packs (Settings > Game text) |
 
 ## Help and bug reports
@@ -221,7 +262,9 @@ explains how to make one from `.msg` files with `tools/make_langpack.py`.
 Join the Star Haven 3DS Discord: https://discord.gg/zHq9tH49Z
 Ask for help there, hear about new versions first, or report a bug. Bug reports on GitHub
 (https://github.com/SecondaryLifer/StarHaven/issues) are welcome too. A photo of the crash
-screen and your `log.txt` help a lot.
+screen and your `log.txt` help a lot. The crash screen also shows a QR code on the bottom screen:
+scan it with your phone and paste the text into your report (it holds the version and where the
+crash happened).
 
 ## Known issues
 

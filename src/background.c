@@ -227,8 +227,9 @@ void appendGfx_background_texture(void) {
     bgMinY = gGameStatusPtr->backgroundMinY;
 #ifdef _3DS
     if (!gBackroundWaveEnabled) {   // 3DS port: 60 fps draws the backdrop half way between steps
-        extern void pm3ds_bg_scroll_note(f32 scroll, s32 left, s32 width);
-        pm3ds_bg_scroll_note(scrollValue, bgMinX, bgMaxX);
+        // (the camera's sideways move and turn on their own: a cut is a jump in either)
+        extern void pm3ds_bg_scroll_note(f32 scroll, s32 left, s32 width, f32 move, f32 turn);
+        pm3ds_bg_scroll_note(scrollValue, bgMinX, bgMaxX, -f5 * 0.25f, theta);
     }
 #endif
 

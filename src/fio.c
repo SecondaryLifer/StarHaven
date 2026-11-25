@@ -252,6 +252,15 @@ bool fio_load_game(s32 saveSlot) {
     }
 #else
     fio_fetch_saved_file_info();
+#ifdef _3DS
+    // 3DS port: an empty slot has no physical save (slot -1). The US and iQue code read
+    // it anyway, from flash page -128 on (before the flash's start; the check below fails
+    // on what comes back), and the file menu asks every slot: os_flash.c logged 39
+    // "read beyond device" warnings per empty slot. Like the PAL version: nothing to load.
+    if (LogicalSaveInfo[saveSlot].slot < 0) {
+        return false;
+    }
+#endif
     fio_read_flash(LogicalSaveInfo[saveSlot].slot, &gCurrentSaveFile, sizeof(SaveData));
 
     if (strcmp(gCurrentSaveFile.magicString, MagicSaveString) == 0) {
@@ -393,6 +402,7 @@ void fio_deserialize_state(void) {
         pm3ds_cheats_deserialize(saveData->unk_1304);
         { extern void pm3ds_qs_deserialize(const void* tail); pm3ds_qs_deserialize(saveData->unk_1304); }
         { extern void pm3ds_keys_deserialize(const void* tail); pm3ds_keys_deserialize(saveData->unk_1304); }
+        { extern void pm3ds_ach_deserialize(const void* pad); pm3ds_ach_deserialize(saveData->pad); }   // achievements.c
     }
 #endif
 }
@@ -439,6 +449,7 @@ void fio_serialize_state(void) {
         pm3ds_cheats_serialize(saveData->unk_1304);
         { extern void pm3ds_qs_serialize(void* tail); pm3ds_qs_serialize(saveData->unk_1304); }
         { extern void pm3ds_keys_serialize(void* tail); pm3ds_keys_serialize(saveData->unk_1304); }
+        { extern void pm3ds_ach_serialize(void* pad); pm3ds_ach_serialize(saveData->pad); }   // achievements.c
     }
 #endif
 }

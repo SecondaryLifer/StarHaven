@@ -27,7 +27,8 @@
 #include "pm3ds_rando.h"
 #include "pm3ds_brand.h"
 #include "pm3ds_rom_layout.h"
-#include <stdio.h>
+#include "pm3ds_keyitems.h"
+#include "pm3ds_lang.h"
 
 extern s32 bActorTattles[];
 void pm3ds_decode_msg(s32 msgID, char* out, s32 size, bool dialogue);   /* touch_menu.c */
@@ -125,6 +126,21 @@ int pm3ds_tattle_query(pm3ds_tattle_list_t* out) {
         out->known++;
     }
     return out->known;
+}
+
+/* the counts alone, without decoding names (achievements.c) */
+void pm3ds_tattle_count(int* known, int* total) {
+    *known = *total = 0;
+    if (gGameStatusPtr == nullptr) {
+        return;
+    }
+    if (sNumEntries < 0) {
+        list_entries();
+    }
+    *total = sNumEntries;
+    for (s32 e = 0; e < sNumEntries; e++) {
+        *known += entry_known(e);
+    }
 }
 
 void pm3ds_tattle_text(int entry, char* out, int size) {
@@ -230,7 +246,10 @@ int pm3ds_quiz_options(int q, char out[3][PM3DS_QUIZ_OPT]) {
                     }
                     continue;
                 }
-                if (b >= 0xF0) {
+                // spaces stay (the decoder drops leading ones): the US and EU choices have
+                // them between words, the iQue's pad some choices with them (GitHub #91)
+                if (b >= 0xF0 && b != MSG_CHAR_READ_SPACE && b != MSG_CHAR_READ_FULL_SPACE &&
+                    b != MSG_CHAR_READ_HALF_SPACE) {
                     break;
                 }
                 one[len++] = b;
@@ -541,6 +560,269 @@ int pm3ds_recipe_query(pm3ds_recipe_list_t* out) {
     return out->count;
 }
 
+/* the counts alone (achievements.c) */
+void pm3ds_recipe_counts(int* cooked, int* total) {
+    *cooked = *total = 0;
+    if (gGameStatusPtr == nullptr) {
+        return;
+    }
+    if (sNumRecipes < 0) {
+        list_recipes();
+    }
+    for (s32 i = 0; i < sNumRecipes; i++) {
+        *cooked += evt_get_variable(nullptr, sRecipeFlag[i]) != 0;
+    }
+    *total = sNumRecipes;
+}
+
+/* ---- Parakarry's letters and Koopa Koot's favors ------------------------------ */
+/* A delivered letter leaves no flag: Parakarry hands it over and it leaves the key
+ * items (world/common/complete/LetterDelivery.inc.c). So a letter is delivered once
+ * Mario has had it and has it no more, and which ones he has had is kept (a bit each,
+ * saved by achievements.c): seen in the key items (the three Parakarry lost on Mt.
+ * Rugged only once he has joined and handed them back: before that Mario gives them
+ * to him), a found one's spot taken (whichever spot holds it in a randomizer seed),
+ * and for a letter of Goompapa's chain, the next one: each recipient hands it over.
+ * A save from before this was kept proves what its flags prove when it is loaded:
+ * Parakarry's three were handed back if he has joined, Lucky Day (not in a randomizer
+ * seed) ends the chain. */
+#define LETTER_PARAKARRY -2   /* Mt. Rugged's three */
+#define LETTER_FOUND -1
+typedef struct {
+    s16 item;
+    s8 prev;            /* the chain letter before it, or LETTER_* */
+    const char* from;   /* English (T) */
+} LetterDef;
+
+static const LetterDef sLetters[PM3DS_LETTER_COUNT] = {
+    { ITEM_LETTER_TO_MERLON,          LETTER_PARAKARRY, "From Merlee" },
+    { ITEM_LETTER_TO_KOLORADO,        LETTER_PARAKARRY, "From his wife" },
+    { ITEM_LETTER_CHAIN_GOOMPAPA_1,   LETTER_PARAKARRY, "From a fishing pal" },
+    { ITEM_LETTER_TO_GOOMPA,          LETTER_FOUND, "From Koopa Koot" },
+    { ITEM_LETTER_TO_MORT_T,          LETTER_FOUND, "From his wife" },
+    { ITEM_LETTER_TO_NOMADIMOUSE,     LETTER_FOUND, "From Moustafa" },
+    { ITEM_LETTER_TO_FICE_T,          LETTER_FOUND, "From Bootler" },
+    { ITEM_LETTER_TO_IGOR,            LETTER_FOUND, "An order from Gusty Gulch" },
+    { ITEM_LETTER_TO_RUSS_T,          LETTER_FOUND, "From a kid on Lavalava Island" },
+    { ITEM_LETTER_TO_MINH_T,          LETTER_FOUND, "From the Wise Wisterwood" },
+    { ITEM_LETTER_TO_MAYOR_PENGUIN,   LETTER_FOUND, "From Yoshi's Village" },
+    { ITEM_LETTER_TO_MERLOW,          LETTER_FOUND, "From Merle, his dad" },
+    { ITEM_LETTER_CHAIN_MUSS_T,       2, "From Goompapa" },
+    { ITEM_LETTER_CHAIN_KOOVER_1,     12, "From Muss T." },
+    { ITEM_LETTER_CHAIN_FISHMAEL,     13, "From Koover" },
+    { ITEM_LETTER_CHAIN_KOOVER_2,     14, "From Fishmael" },
+    { ITEM_LETTER_CHAIN_MR_E,         15, "From Koover" },
+    { ITEM_LETTER_CHAIN_MISS_T,       16, "From Mr. E." },
+    { ITEM_LETTER_CHAIN_LITTLE_MOUSER, 17, "From Miss T." },
+    { ITEM_LETTER_CHAIN_FRANKY,       18, "From Little Mouser" },
+    { ITEM_LETTER_CHAIN_DANE_T_1,     19, "From Franky" },
+    { ITEM_LETTER_CHAIN_YOSHI_KID,    20, "From Dane T." },
+    { ITEM_LETTER_CHAIN_DANE_T_2,     21, "From the Red Yoshi Kid" },
+    { ITEM_LETTER_CHAIN_FROST_T,      22, "From Dane T." },
+    { ITEM_LETTER_CHAIN_GOOMPAPA_2,   23, "From Frost T." },
+};
+#define LETTER_CHAIN_LAST 24
+_Static_assert(PM3DS_LETTER_COUNT <= 32, "a bit per letter");
+
+static bool key_held(s32 item) {
+    for (s32 i = 0; i < KEY_SLOTS; i++) {
+        if (KEY_ITEM(i) == item) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* the spot that holds this item (the randomizer's, in a seed) has been taken */
+static bool spot_taken(s32 item) {
+    extern s32 pm3ds_rando_spot_item(s32 flag, s32 vanillaItem);
+    for (u32 i = 0; i < ARRAY_COUNT(sSpots); i++) {
+        const TrackedSpot* s = &sSpots[i];
+        if (s->flag != 0 && s->item != ITEM_NONE && pm3ds_rando_spot_item(s->flag, s->item) == item &&
+            evt_get_variable(nullptr, s->flag) != 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static u32 sLetterHad;       /* bit per sLetters entry: Mario has had it */
+static bool sLetterLoaded;   /* a file was just loaded */
+
+/* achievements.c keeps the bits in the save */
+u32 pm3ds_letters_had(void) {
+    return sLetterHad;
+}
+
+void pm3ds_letters_had_set(u32 had, bool loaded) {
+    sLetterHad = had;
+    sLetterLoaded = loaded;
+}
+
+/* states of all letters (out[i]: PM3DS_ERRAND_*), seen[i]: found at least once */
+static void letter_states(u8* out, u8* seen) {
+    bool joined = evt_get_variable(nullptr, GB_StoryProgress) >= STORY_CH2_PARAKARRY_JOINED_PARTY;
+    bool held[PM3DS_LETTER_COUNT], found[PM3DS_LETTER_COUNT];
+    for (s32 i = 0; i < PM3DS_LETTER_COUNT; i++) {
+        const LetterDef* l = &sLetters[i];
+        held[i] = key_held(l->item);
+        found[i] = l->prev < 0 && spot_taken(l->item);
+        if ((held[i] && (l->prev != LETTER_PARAKARRY || joined)) || (l->prev == LETTER_FOUND && found[i]) ||
+            (l->prev == LETTER_PARAKARRY && joined && sLetterLoaded)) {
+            sLetterHad |= 1u << i;
+        }
+    }
+    if (sLetterLoaded && pm3ds_rando_seed() == 0) {
+        for (s32 i = 0; i < ARRAY_COUNT(gPlayerData.badges); i++) {
+            if (gPlayerData.badges[i] == ITEM_LUCKY_DAY) {   /* Goompapa's reward for the chain's last letter */
+                sLetterHad |= 1u << LETTER_CHAIN_LAST;
+            }
+        }
+    }
+    sLetterLoaded = false;
+    for (s32 i = PM3DS_LETTER_COUNT - 1; i >= 0; i--) {   /* sLetters lists the chain in order */
+        if (sLetters[i].prev >= 0 && (sLetterHad & (1u << i))) {
+            sLetterHad |= 1u << sLetters[i].prev;
+        }
+    }
+    for (s32 i = 0; i < PM3DS_LETTER_COUNT; i++) {
+        bool had = (sLetterHad >> i) & 1;
+        out[i] = held[i] ? PM3DS_ERRAND_HELD : had ? PM3DS_ERRAND_DONE : PM3DS_ERRAND_NOT_YET;
+        seen[i] = held[i] || had || found[i];
+    }
+}
+
+typedef struct {
+    s16 item;           /* ITEM_NONE: what_en says what */
+    const char* what;
+} FavorDef;
+
+/* src/world/area_nok/nok_02/koot_favors.c: KootFavorData, in KOOT_FAVOR_* order; each
+ * favor's unlocked, gave up and complete flags follow one another from KootFavor00's */
+static const FavorDef sFavors[PM3DS_FAVOR_COUNT] = {
+    { ITEM_KOOT_KOOPA_LEGENDS, nullptr },  { ITEM_SLEEPY_SHEEP, nullptr },
+    { ITEM_KOOT_THE_TAPE, nullptr },       { ITEM_KOOPA_TEA, nullptr },
+    { ITEM_KOOT_LUIGI_AUTOGRAPH, nullptr }, { ITEM_KOOT_EMPTY_WALLET, nullptr },
+    { ITEM_TASTY_TONIC, nullptr },         { ITEM_KOOT_MERLUVLEE_AUTOGRAPH, nullptr },
+    { ITEM_NONE, "Read him the Toad Town news" }, { ITEM_LIFE_SHROOM, nullptr },
+    { ITEM_NUTTY_CAKE, nullptr },          { ITEM_NONE, "Quiet the noisy house next door" },
+    { ITEM_KOOT_OLD_PHOTO, nullptr },      { ITEM_KOOPASTA, nullptr },
+    { ITEM_KOOT_GLASSES, nullptr },        { ITEM_LIME, nullptr },
+    { ITEM_KOOKY_COOKIE, nullptr },        { ITEM_KOOT_PACKAGE, nullptr },
+    { ITEM_COCONUT, nullptr },             { ITEM_KOOT_RED_JAR, nullptr },
+};
+
+static u8 favor_state(s32 i, bool* seen, bool* current) {
+    bool unlocked = evt_get_variable(nullptr, GF_NOK02_KootFavor00_Unlocked + 3 * i) != 0;
+    bool gaveUp = evt_get_variable(nullptr, GF_NOK02_KootFavor00_GaveUp + 3 * i) != 0;
+    bool done = evt_get_variable(nullptr, GF_NOK02_KootFavor00_Complete + 3 * i) != 0;
+    *current = !done && evt_get_variable(nullptr, GB_KootFavor_State) == 2 &&   /* KOOT_FAVOR_STATE_2: accepted */
+               evt_get_variable(nullptr, GB_KootFavor_Current) == i;
+    *seen = unlocked || gaveUp || done;
+    return done ? PM3DS_ERRAND_DONE : *current ? PM3DS_ERRAND_HELD : gaveUp ? PM3DS_ERRAND_GAVE_UP : PM3DS_ERRAND_NOT_YET;
+}
+
+void pm3ds_letter_counts(int* delivered, int* total, bool* chainDone) {
+    u8 st[PM3DS_LETTER_COUNT], seen[PM3DS_LETTER_COUNT];
+    *delivered = *total = 0;
+    *chainDone = false;
+    if (gGameStatusPtr == nullptr) {
+        return;
+    }
+    letter_states(st, seen);
+    for (s32 i = 0; i < PM3DS_LETTER_COUNT; i++) {
+        *delivered += st[i] == PM3DS_ERRAND_DONE;
+    }
+    *total = PM3DS_LETTER_COUNT;
+    *chainDone = st[LETTER_CHAIN_LAST] == PM3DS_ERRAND_DONE;
+}
+
+void pm3ds_favor_counts(int* done, int* total) {
+    *done = *total = 0;
+    if (gGameStatusPtr == nullptr) {
+        return;
+    }
+    for (s32 i = 0; i < PM3DS_FAVOR_COUNT; i++) {
+        bool seen, current;
+        *done += favor_state(i, &seen, &current) == PM3DS_ERRAND_DONE;
+    }
+    *total = PM3DS_FAVOR_COUNT;
+}
+
+/* decoded once */
+static char sLetterTo[PM3DS_LETTER_COUNT][PM3DS_UI_DESC];
+static char sFavorWhat[PM3DS_FAVOR_COUNT][PM3DS_UI_NAME];
+
+/* who the letter is for: the first sentence of its description ("A letter to Mr. E. in Dry
+ * Dry Outpost.": the sentence ends before the one naming Parakarry, as in every language;
+ * names have full stops of their own). Chinese: up to the first full stop. */
+static void letter_who(char* s) {
+    static char karry[PM3DS_UI_NAME];
+    if (karry[0] == '\0') {
+        pm3ds_decode_msg(MSG_Menus_Party_Parakarry, karry, sizeof(karry), false);
+    }
+    for (s32 i = 0; s[i] != '\0'; i++) {
+        if (s[i] == PM3DS_TXT_ESC && s[i + 1] && s[i + 2] && s[i + 3]) {
+            u32 cp = ((u32)(s[i + 1] & 0x7F) << 14) | ((u32)(s[i + 2] & 0x7F) << 7) | (s[i + 3] & 0x7F);
+            if (cp == 0x3002) {   /* 。 */
+                s[i + 4] = '\0';
+                return;
+            }
+            i += 3;
+        }
+    }
+    char* end = karry[0] != '\0' ? strstr(s, karry) : nullptr;
+    s32 cut = -1;
+    for (s32 i = 0; end != nullptr && s + i < end; i++) {
+        if ((s[i] == '.' || s[i] == '!') && s[i + 1] == ' ') {
+            cut = i;
+        }
+    }
+    if (cut >= 0) {
+        s[cut + 1] = '\0';
+    }
+}
+
+void pm3ds_errands_query(pm3ds_errands_t* out) {
+    u8 st[PM3DS_LETTER_COUNT], seen[PM3DS_LETTER_COUNT];
+    memset(out, 0, sizeof(*out));
+    if (gGameStatusPtr == nullptr) {
+        return;
+    }
+    letter_states(st, seen);
+    for (s32 i = 0; i < PM3DS_LETTER_COUNT; i++) {
+        s32 item = sLetters[i].item;
+        if (sLetterTo[i][0] == '\0') {
+            pm3ds_decode_msg(gItemTable[item].fullDescMsg, sLetterTo[i], PM3DS_UI_DESC, false);
+            letter_who(sLetterTo[i]);
+        }
+        memcpy(out->letter[i].to, sLetterTo[i], PM3DS_UI_DESC);
+        out->letter[i].from = sLetters[i].from;
+        out->letter[i].icon = item_hud_script(item);
+        out->letter[i].state = st[i];
+        out->letter[i].seen = seen[i];
+        out->delivered += st[i] == PM3DS_ERRAND_DONE;
+    }
+    for (s32 i = 0; i < PM3DS_FAVOR_COUNT; i++) {
+        bool seenF, current;
+        s32 item = sFavors[i].item;
+        out->favor[i].state = favor_state(i, &seenF, &current);
+        out->favor[i].seen = seenF;
+        out->favor[i].current = current;
+        if (item != ITEM_NONE) {
+            if (sFavorWhat[i][0] == '\0') {
+                pm3ds_decode_msg(gItemTable[item].nameMsg, sFavorWhat[i], PM3DS_UI_NAME, false);
+            }
+            memcpy(out->favor[i].what, sFavorWhat[i], PM3DS_UI_NAME);
+            out->favor[i].icon = item_hud_script(item);
+        } else {
+            out->favor[i].what_en = sFavors[i].what;
+            out->favor[i].icon = item_hud_script(ITEM_KOOT_PACKAGE);
+        }
+        out->favors_done += out->favor[i].state == PM3DS_ERRAND_DONE;
+    }
+}
+
 /* ---- Badges ------------------------------------------------------------------ */
 s32 pause_badges_try_equip(s16 badgeID);
 s32 pause_badges_try_remove(s16 badgeID);
@@ -809,3 +1091,110 @@ void pm3ds_journal_debug_fill(void) {
     }
 }
 #endif
+
+/* ---- "Where to go next" -------------------------------------------------------- */
+/* one hint per stretch of the story (include/enums.h, StoryProgress): shown while the
+ * story byte is below .before. Written for this port; English, the bottom screen
+ * translates them (pm3ds_lang_table.inc). The map each step is set on (Set(GB_StoryProgress,
+ * ...) in src/world) is what they were checked against. */
+typedef struct {
+    s8 before;
+    const char* text;
+} StoryHint;
+
+static const StoryHint sHints[] = {
+    { STORY_CH0_FELL_OFF_CLIFF, "Look around Goomba Village and talk to Goompa." },
+    { STORY_CH0_FOUND_HAMMER, "Goompa fell off the cliff. Find him below, then search the forest's bushes for a Hammer." },
+    { STORY_CH0_GOOMBARIO_JOINED_PARTY, "Beat Jr. Troopa in the forest playground, then go back up to Goomba Village." },
+    { STORY_CH0_DEFEATED_GOOMBA_KING, "Smash the block on the village gate with your Hammer and follow Goomba Road east to the Goomba King." },
+    { STORY_CH0_OPENED_BRIDGE_TO_TOAD_TOWN, "Find the switch near the Goomba King's fort to lower the bridge to Toad Town." },
+    { STORY_CH0_RETURNED_TO_TOAD_TOWN, "Go through Toad Town and up to Shooting Star Summit, where the Star Spirits are waiting." },
+    { STORY_CH1_KNOCKED_SWITCH_FROM_TREE, "Talk to Merlon in Toad Town, then take Pleasant Path east. Where it ends at a gap, hit the tree with your Hammer." },
+    { STORY_CH1_ARRIVED_AT_KOOPA_VILLAGE, "Hit the switch that fell from the tree to make a bridge, and go on to Koopa Village." },
+    { STORY_CH1_KOOPER_JOINED_PARTY, "Help the Koopas with the Fuzzies, then chase the one that took Kooper's shell into the woods." },
+    { STORY_CH1_ARRIVED_AT_KOOPA_FORTRESS, "With Kooper, make the next bridge on Pleasant Path past Koopa Village and go on to Koopa Bros. Fortress." },
+    { STORY_CH1_BOMBETTE_JOINED_PARTY, "Look for keys in the fortress. When you fall into the dungeon, talk to the Bob-omb in the cell." },
+    { STORY_CH1_STAR_SPIRIT_RESCUED, "Bombette can blow up cracked walls. Climb the fortress and beat the Koopa Bros." },
+    { STORY_CH1_RETURNED_TO_TOAD_TOWN, "Head back to Toad Town along Pleasant Path." },
+    { STORY_CH2_ARRIVED_AT_MT_RUGGED, "Go to the train station in the south of Toad Town. Clear what blocks the tracks and ride to Mt. Rugged." },
+    { STORY_CH2_PARAKARRY_JOINED_PARTY, "A Paratroopa mail carrier lost three letters on Mt. Rugged. Find them and bring them back to him." },
+    { STORY_CH2_ARRIVED_AT_DRY_DRY_OUTPOST, "Parakarry carries you over gaps. Cross Mt. Rugged, then head east across Dry Dry Desert to Dry Dry Outpost." },
+    { STORY_CH2_BOUGHT_SECRET_ITEMS, "In Dry Dry Outpost, talk to the Nomadimouse hiding his face in the back of town. Fruit from the oasis south of town makes him talk." },
+    { STORY_CH2_GOT_PULSE_STONE, "Check the door where he waited and climb onto the rooftops. The town's leader is up there." },
+    { STORY_CH2_UNCOVERED_DRY_DRY_RUINS, "Walk the desert with the Pulse Stone. Where it flashes fastest, put it on the small rock." },
+    { STORY_CH2_SOLVED_ARTIFACT_PUZZLE, "In Dry Dry Ruins, drain the sand, find the Super Hammer, and put the Pyramid, Diamond and Lunar Stones in place." },
+    { STORY_CH2_STAR_SPIRIT_RESCUED, "Take the new stairs to the bottom of the ruins and beat Tutankoopa." },
+    { STORY_CH3_SAW_BOO_ENTER_FOREST, "Return to Toad Town and go to the gate of Forever Forest, near Tayce T.'s house." },
+    { STORY_CH3_ARRIVED_AT_BOOS_MANSION, "Go into Forever Forest. To find your way, take the path that looks different from the others." },
+    { STORY_CH3_GOT_RECORD, "Go into Boo's Mansion and look around for a Record." },
+    { STORY_CH3_WEIGHED_DOWN_CHANDELIER, "Play the Record on the phonograph to distract a Boo and take the Weight. Hang it from the chandelier by the sofa." },
+    { STORY_CH3_GOT_SUPER_BOOTS, "Go through the door the glass case hid and down to the storeroom. Win the Boos' game for new Boots." },
+    { STORY_CH3_BOW_JOINED_PARTY, "Spin Jump through boarded floors to find Boo's Portrait and hang it back up. A Boo takes you upstairs." },
+    { STORY_CH3_ARRIVED_AT_TUBBAS_MANOR, "With Bow, head through Gusty Gulch to Tubba Blubba's Castle." },
+    { STORY_CH3_TUBBA_WOKE_UP, "Find keys to get through the castle. Tubba Blubba sleeps upstairs: sneak to the chest by his bed." },
+    { STORY_CH3_ESCAPED_TUBBAS_MANOR, "Run! Get out of the castle before Tubba Blubba catches you." },
+    { STORY_CH3_HEART_ESCAPED_WINDY_MILL, "The talking key opens Windy Mill in Gusty Gulch. Go down its well and chase Tubba Blubba's heart." },
+    { STORY_CH3_STAR_SPIRIT_RESCUED, "Follow the heart back to Tubba Blubba and beat him." },
+    { STORY_CH4_FRYING_PAN_STOLEN, "Head back to Toad Town." },
+    { STORY_CH4_ENTERED_THE_TOY_BOX, "Shy Guys are causing trouble in Toad Town. Watch the second house west of the shop in the south. Bow can hide you." },
+    { STORY_CH4_RETURNED_STOREROOM_KEY, "In Shy Guy's Toy Box, find the Storeroom Key and give it back to the shopkeeper in the south of Toad Town." },
+    { STORY_CH4_RETURNED_TOY_TRAIN, "Take the Toy Train from his storeroom and put it into the Toy Box from outside." },
+    { STORY_CH4_GOT_TAYCE_TS_CAKE, "Ride the train through the Toy Box, find Tayce T.'s Frying Pan and bring it back to her." },
+    { STORY_CH4_GAVE_CAKE_TO_GOURMET_GUY, "Give the Cake to the hungry Gourmet Guy in the Toy Box." },
+    { STORY_CH4_SOLVED_COLOR_PUZZLE, "On the moving walkways, hide with Bow to slip past. Then hit the colored blocks in the right order." },
+    { STORY_CH4_WATT_JOINED_PARTY, "In the dark rooms, beat the Big Lantern Ghost and free the light it carries." },
+    { STORY_CH4_STAR_SPIRIT_RESCUED, "Watt lights up dark rooms. Follow the Shy Guys running from the light to General Guy and beat him." },
+    { STORY_CH5_WHALE_MOUTH_OPEN, "Go to the port in Toad Town and hit the strange island by the docks." },
+    { STORY_CH5_REACHED_LAVA_LAVA_ISLAND, "The whale has a bellyache: go into its mouth and help. Then it takes you to Lavalava Island." },
+    { STORY_CH5_SUSHIE_JOINED_PARTY, "Go through Jade Jungle to Yoshi's Village. When the Yoshi kids go missing, find their babysitter first." },
+    { STORY_CH5_ALL_YOSHI_CHILDREN_RESCUED, "Find all five Yoshi kids in Jade Jungle. Sushie lets you swim." },
+    { STORY_CH5_REACHED_RAPHAELS_TREE, "Put the Jade Raven from the village chief on the big stone statue, and follow the new path to a giant tree." },
+    { STORY_CH5_ENTERED_MT_LAVA_LAVA, "Climb the giant tree and talk to Raphael the Raven. He'll get you to Mt. Lavalava." },
+    { STORY_CH5_GOT_ULTRA_HAMMER, "Inside Mt. Lavalava, slow the lava with the blue blocks and find the Ultra Hammer." },
+    { STORY_CH5_DEFEATED_LAVA_PIRANHA, "Smash the stone blocks with the Ultra Hammer and go deep into the volcano." },
+    { STORY_CH5_BEGAN_PEACH_MISSION, "The volcano is erupting! Run back out." },
+    { STORY_CH5_TRADED_VASE_FOR_SEED, "The eruption threw a chest into the jungle near where you met Sushie. Bring what's inside to Kolorado." },
+    { STORY_CH5_RETURNED_TO_TOAD_TOWN, "Ride the whale back to Toad Town." },
+    { STORY_CH6_FLOWER_GATE_OPEN, "Bring four Magical Seeds (Toad Town, Forever Forest, Jade Jungle, Mt. Rugged) to Minh T. in Toad Town." },
+    { STORY_CH6_GOT_MAGICAL_BEAN, "In Flower Fields, help the flower east of the big tree: Monty Moles are bothering her." },
+    { STORY_CH6_GOT_FERTILE_SOIL, "Smash the tree near Petunia for a Red Berry and give it to the hungry red flower. The flower past his gate has Fertile Soil." },
+    { STORY_CH6_GOT_WATER_STONE, "A Yellow Berry opens the yellow flower's gate. Get a Crystal Berry from Posie and trade it to Rosie for the Water Stone." },
+    { STORY_CH6_FILLED_SPRING_WITH_WATER, "Put the Water Stone in the dry spring past the yellow flower's gate." },
+    { STORY_CH6_LAKILESTER_JOINED_PARTY, "Find the Sun in Flower Fields and hear him out. On the way back, a Lakitu gets in your way." },
+    { STORY_CH6_DESTROYED_PUFF_PUFF_MACHINE, "Ride Lakilester, stomp the colored blocks in the right order, and smash the Puff Puff Machine." },
+    { STORY_CH6_GREW_MAGIC_BEANSTALK, "Ask the Wise Wisterwood for advice. Then plant in order: Fertile Soil, the Magical Bean, Miracle Water." },
+    { STORY_CH6_STAR_SPIRIT_RESCUED, "Climb the beanstalk above the clouds and beat Huff N. Puff." },
+    { STORY_CH7_INVITED_TO_STARBORN_VALLEY, "Return to Toad Town and talk to Merlon." },
+    { STORY_CH7_ARRIVED_AT_SHIVER_CITY, "Get the Ultra Boots deep in Toad Town Tunnels. Then find a blue door on a high ledge: Watt shows the hidden blocks." },
+    { STORY_CH7_MAYOR_MURDER_SOLVED, "In Shiver City, visit the Mayor Penguin. If you get blamed for trouble, find Herringway past the frozen pond." },
+    { STORY_CH7_ARRIVED_AT_STARBORN_VALLEY, "Take the snowy path west of Shiver City across Shiver Snowfield to Starborn Valley." },
+    { STORY_CH7_GOT_SNOWMAN_SCARF, "In Starborn Valley, talk to Merle." },
+    { STORY_CH7_GOT_SNOWMAN_BUCKET, "Go back to Shiver City: the Mayor Penguin has a treasure for you too." },
+    { STORY_CH7_UNLOCKED_SHIVER_MOUNTAIN, "Put the Scarf and the Bucket on the snowmen by the cliff so they all look the same." },
+    { STORY_CH7_GOT_STAR_STONE, "Climb Shiver Mountain and break the cracked wall. In the icy cave, don't trust your eyes: keep walking." },
+    { STORY_CH7_ARRIVED_AT_CRYSTAL_PALACE, "Use the Star Stone at the top of Shiver Mountain to reach the Crystal Palace." },
+    { STORY_CH7_EXTENDED_PALACE_BRIDGE, "In the Crystal Palace, what you do on one side of the glass happens on the other. Watch out for copycats." },
+    { STORY_CH7_SOLVED_ALBINO_DINO_PUZZLE, "Find the room under a statue. Talk to the Albino Dinos to turn them and push the statues into place." },
+    { STORY_CH7_STAR_SPIRIT_RESCUED, "Beat the Crystal King. Two of the three kings are fakes: hit them all." },
+    { STORY_CH8_OPENED_PATH_TO_STAR_WAY, "Go to Shooting Star Summit. The Star Spirits are waiting there." },
+    { STORY_CH8_REACHED_BOWSERS_CASTLE, "Climb the Star Way to Star Haven and ride the Star Ship to Bowser's Castle." },
+    { STORY_CH8_REACHED_PEACHS_CASTLE, "Make your way up through Bowser's Castle to Princess Peach's Castle." },
+    { STORY_EPILOGUE, "Climb to the top of Peach's Castle and beat Bowser!" },
+    { 127, "You saved the Mushroom Kingdom! See what's left on the Found and Achievements pages." },
+};
+
+const char* pm3ds_story_hint(void) {
+    if (gGameStatusPtr == nullptr) {
+        return nullptr;
+    }
+    if (gGameStatusPtr->peachFlags & PEACH_FLAG_IS_PEACH) {
+        return "You're Princess Peach for now. Look around the castle: Twink can help.";
+    }
+    s32 story = evt_get_variable(nullptr, GB_StoryProgress);
+    for (u32 i = 0; i < ARRAY_COUNT(sHints); i++) {
+        if (story < sHints[i].before) {
+            return sHints[i].text;
+        }
+    }
+    return sHints[ARRAY_COUNT(sHints) - 1].text;
+}

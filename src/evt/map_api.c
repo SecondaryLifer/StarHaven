@@ -743,9 +743,20 @@ void goto_map(Evt* script, s32 mode) {
         get_map_IDs_by_name((char*)evt_get_variable(script, *args++), &areaID, &mapID);
     }
 
+#ifdef _3DS
+    {   // 3DS port: the randomizer's door shuffle (n64_shim/rando.c) may lead this door elsewhere
+        extern void pm3ds_rando_door(s16* areaID, s16* mapID, s32* entryID);
+        s32 entryID = evt_get_variable(script, *args++);
+        pm3ds_rando_door(&areaID, &mapID, &entryID);
+        gGameStatusPtr->areaID = areaID;
+        gGameStatusPtr->mapID = mapID;
+        gGameStatusPtr->entryID = entryID;
+    }
+#else
     gGameStatusPtr->areaID = areaID;
     gGameStatusPtr->mapID = mapID;
     gGameStatusPtr->entryID = evt_get_variable(script, *args++);
+#endif
 
     if (mode == 1) {
         mapTransitionEffect = evt_get_variable(script, *args++);

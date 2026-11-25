@@ -484,6 +484,12 @@ s32 _update_message(MessagePrintState* printer) {
                     charsToPrint = 6;
                     printer->curPrintDelay = 0;
                 }
+                // 3DS port: "Instant" prints the rest of the page in one go: everything up to
+                // the next wait for A, pause or new page (the copy stops at each of those)
+                if (pm3ds_settings_text_speed() == 2 && printer->windowState == MSG_WINDOW_STATE_PRINTING &&
+                    (printer->stateFlags & MSG_STATE_FLAG_PRINT_QUICKLY)) {
+                    charsToPrint = 10000;
+                }
 #endif
                 if ((printer->curPrintDelay == 0) || --printer->curPrintDelay == 0) {
                     msg_copy_to_print_buffer(printer, charsToPrint, 0);
@@ -506,6 +512,12 @@ s32 _update_message(MessagePrintState* printer) {
                 {
                     printer->curLinePos += (s32)(6 / DT);
                 }
+#ifdef _3DS
+                // 3DS port: "Instant": a new page needs no scrolling either (not for timed text)
+                if (pm3ds_settings_text_speed() == 2 && !(printer->stateFlags & MSG_STATE_FLAG_10)) {
+                    printer->curLinePos = printer->nextLinePos;
+                }
+#endif
 
                 if (printer->curLinePos >= printer->nextLinePos) {
                     printer->windowState = MSG_WINDOW_STATE_PRINTING;

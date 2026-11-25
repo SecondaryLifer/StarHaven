@@ -528,6 +528,18 @@ void action_command_free(void) {
     btl_set_popup_duration(POPUP_MSG_OFF);
 }
 
+#ifdef _3DS
+// 3DS port (GitHub #64): Watt's Mega Shock and Lakilester's Hurricane fill their meter
+// with A and B pressed together. The bottom screen's touch pad takes one finger, so
+// while one of them runs its A and B buttons each press both (platform/bottom_screen.c).
+bool pm3ds_action_command_wants_ab(void) {
+    ActionCommandStatus* acs = &gActionCommandStatus;
+
+    return gGameStatusPtr->context == CONTEXT_BATTLE
+        && (acs->actionCommandID == ACTION_COMMAND_MEGA_SHOCK || acs->actionCommandID == ACTION_COMMAND_HURRICANE);
+}
+#endif
+
 void create_action_command_ui_worker(void) {
     ActionCommandStatus* actionCmdStatus = &gActionCommandStatus;
     actionCmdStatus->workerID = create_worker_frontUI(action_command_update, action_command_draw);

@@ -94,7 +94,7 @@ static const char **s_conv;    /* NUM_TR (NUM_ZH in Chinese) strings in the UI e
 static int s_nconv;
 
 /* English -> entry: an open-addressed hash of the English column */
-#define HASH_SLOTS 1024
+#define HASH_SLOTS 2048   /* a power of two well above the table sizes (open addressing) */
 static int16_t s_hash[HASH_SLOTS], s_zh_hash[HASH_SLOTS];
 static bool s_hashed;
 

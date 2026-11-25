@@ -383,6 +383,7 @@ void filemenu_yesno_handle_input(MenuPanel* menu) {
                             pm3ds_rando_new_game();
                             pm3ds_cheats_new_game();
                             { extern void pm3ds_qs_new_game(void); pm3ds_qs_new_game(); }
+                            { extern void pm3ds_ach_new_game(void); pm3ds_ach_new_game(); }
                         }
 #endif
                         gGameStatusPtr->areaID = AREA_KMR;
@@ -426,6 +427,12 @@ void filemenu_yesno_handle_input(MenuPanel* menu) {
 #ifdef PM3DS_START_PARTNER   /* e.g. -DPM3DS_START_PARTNER=PARTNER_BOW for scenes that need one */
                         gPlayerData.partners[PM3DS_START_PARTNER].enabled = true;
                         gPlayerData.curPartner = PM3DS_START_PARTNER;
+#ifdef PM3DS_START_PARTNER_RANK   /* e.g. =2: Ultra rank (Watt's Mega Shock, GitHub #64) */
+                        gPlayerData.partners[PM3DS_START_PARTNER].level = PM3DS_START_PARTNER_RANK;
+#endif
+#endif
+#ifdef PM3DS_START_FP   /* e.g. -DPM3DS_START_FP=30 */
+                        gPlayerData.curMaxFP = gPlayerData.hardMaxFP = gPlayerData.curFP = PM3DS_START_FP;
 #endif
 #ifdef PM3DS_START_ITEM   /* e.g. -DPM3DS_START_ITEM=ITEM_WHACKAS_BUMP -DPM3DS_START_ITEM_N=3 */
                         {

@@ -145,6 +145,47 @@ int pm3ds_quiz_right(int q);                                /* the right choice,
 void pm3ds_quiz_question(int q, char *out, int size);
 int pm3ds_quiz_options(int q, char out[3][PM3DS_QUIZ_OPT]);   /* how many */
 
+/* Achievements (n64_shim/achievements.c, GitHub #88): the save's earned ones */
+#define PM3DS_ACH_COUNT 40
+typedef struct {
+    int count, earned;
+    struct {
+        const char *name, *how;               /* English: the bottom screen translates them (T) */
+        const void *icon;                     /* HudScript */
+        unsigned char earned, hidden;         /* hidden: ??? until earned */
+    } a[PM3DS_ACH_COUNT];
+} pm3ds_ach_list_t;
+int pm3ds_ach_query(pm3ds_ach_list_t *out);
+int pm3ds_ach_next_notice(void);              /* an achievement just earned, to announce; -1 none */
+
+/* Parakarry's letters and Koopa Koot's favors (n64_shim/journal.c), from the game's flags */
+#define PM3DS_LETTER_COUNT 25
+#define PM3DS_FAVOR_COUNT 20
+enum { PM3DS_ERRAND_NOT_YET, PM3DS_ERRAND_HELD, PM3DS_ERRAND_DONE, PM3DS_ERRAND_GAVE_UP };
+typedef struct {
+    int delivered, favors_done;
+    struct {
+        char to[PM3DS_UI_DESC];               /* the letter's own description: who and where */
+        const char *from;                     /* English (T) */
+        const void *icon;
+        unsigned char state;                  /* NOT_YET (not found), HELD (in the bag), DONE (delivered) */
+        unsigned char seen;                   /* found at least once (spoilers: ??? until then) */
+    } letter[PM3DS_LETTER_COUNT];
+    struct {
+        char what[PM3DS_UI_NAME];             /* the item he asks for, in the game's text... */
+        const char *what_en;                  /* ...or, for the two without one, English (T) */
+        const void *icon;
+        unsigned char state;                  /* NOT_YET, HELD (asked for), DONE, GAVE_UP */
+        unsigned char current;                /* the one he's waiting for now */
+        unsigned char seen;                   /* he has it on his list (spoilers: ??? until then) */
+    } favor[PM3DS_FAVOR_COUNT];
+} pm3ds_errands_t;
+void pm3ds_errands_query(pm3ds_errands_t *out);
+
+/* "Where to go next" (n64_shim/journal.c): a hint for the story step the save is at,
+ * English (T); NULL if no game is running */
+const char *pm3ds_story_hint(void);
+
 /* N64 images the menu draws, decoded once into the UI atlas */
 enum {
     UI_IMG_HEART, UI_IMG_FLOWER, UI_IMG_COIN, UI_IMG_STAR_POINT, UI_IMG_STAR_PIECE,

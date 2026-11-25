@@ -107,12 +107,13 @@ static float s_bg_sum;
 
 bool pm3ds_fps60 = true;
 
-/* the sky backdrop's scroll (src/background.c), per step */
-typedef struct { uint32_t tick; float scroll, left, width; } bg_note_t;
+/* the sky backdrop's scroll (src/background.c), per step: the whole value, and
+ * the parts from the camera's sideways move and its turn (degrees) */
+typedef struct { uint32_t tick; float scroll, left, width, move, turn; } bg_note_t;
 static bg_note_t s_bg_cur, s_bg_prev;
 
-void pm3ds_bg_scroll_note(float scroll, int left, int width) {
-    s_bg_cur = (bg_note_t){ s_tick, scroll, (float)left, (float)width };
+void pm3ds_bg_scroll_note(float scroll, int left, int width, float move, float turn) {
+    s_bg_cur = (bg_note_t){ s_tick, scroll, (float)left, (float)width, move, turn };
 }
 
 bool gfx_interp_bg_edges(float *left, float *right) {
@@ -122,23 +123,42 @@ bool gfx_interp_bg_edges(float *left, float *right) {
     return true;
 }
 
+/* Where the backdrop is drawn, in N64 pixels to the right of where the game
+ * put it. The game draws it at the whole pixel of its scroll value, once a
+ * step: slow pans moved it a pixel every few steps while the world glided at
+ * 60 fps. Here it goes to the exact value, and on an in-between frame half way
+ * back to the last step's. A cut (the camera jumping or snapping round) keeps
+ * the step's own position. */
 float gfx_interp_bg_shift(float *left, float *right) {
-    if (s_t >= 1.0f || s_bg_cur.tick != s_tick || s_bg_prev.tick != s_tick - 1 ||
-        s_bg_cur.width != s_bg_prev.width || s_bg_cur.width <= 0.0f)
-        return 0.0f;
-    float d = s_bg_cur.scroll - s_bg_prev.scroll;
+    if (s_bg_cur.tick != s_tick || s_bg_cur.width <= 0.0f) return 0.0f;
     float w = s_bg_cur.width;
-    while (d > w / 2) d -= w;            /* the shorter way round the wrap */
-    while (d < -w / 2) d += w;
-    if (d > 48.0f || d < -48.0f) return 0.0f;   /* a cut, not a scroll */
+    float shift = s_bg_cur.scroll - floorf(s_bg_cur.scroll);   /* >= 0: the game wraps it */
+#ifdef PM3DS_BG_OLD   /* debug A/B: the backdrop at whole pixels, as 1.3.15 drew it */
+    shift = 0.0f;
+#endif
+    if (s_t < 1.0f && s_bg_prev.tick == s_tick - 1 && s_bg_prev.width == w) {
+        float d = s_bg_cur.scroll - s_bg_prev.scroll;
+        while (d > w / 2) d -= w;            /* the shorter way round the wrap */
+        while (d < -w / 2) d += w;
+        float turn = s_bg_cur.turn - s_bg_prev.turn;
+        while (turn > 180.0f) turn -= 360.0f;
+        while (turn < -180.0f) turn += 360.0f;
+        float move = s_bg_cur.move - s_bg_prev.move;
+        if (move <= 48.0f && move >= -48.0f && turn <= 45.0f && turn >= -45.0f) {
+            shift += (s_t - 1.0f) * d;       /* where it was half a step ago */
+            if (d != 0.0f) {
+                s_n_bg++;
+                s_bg_sum += fabsf(d);
+            }
+        }
+    }
     *left = s_bg_cur.left;
     *right = s_bg_cur.left + w;
-    if (d != 0.0f) {
-        s_n_bg++;
-        s_bg_sum += fabsf(d);
-    }
-    return (s_t - 1.0f) * d;             /* where it was half a step ago */
+    return shift;
 }
+
+/* the walk being drawn is a 60 fps in-between frame */
+bool gfx_interp_in_between(void) { return s_t < 1.0f; }
 
 void gfx_interp_new_tick(void) {
     s_tick++;

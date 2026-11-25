@@ -107,6 +107,8 @@ static pm3ds_touch_menu_t s_tm;   /* the game's open list menu (pm3ds_touch_menu
 static int s_tm_page, s_tm_kind_seen, s_tm_count_seen;
 static float s_map_cx = -1, s_map_cy = -1;   /* map view centre in map pixels */
 static bool s_map_follow = true;
+static bool s_map_hint;                      /* the Map's "Where to go next" hint is shown */
+static float s_map_hint_y1;                  /* its card's bottom, while shown */
 
 /* ---- texture building ---------------------------------------------------- */
 static u8 s_morton[64];
@@ -613,7 +615,12 @@ static float font_glyph(float x, float y, uint32_t cp, float scale, u32 c, bool 
             if (slot >= 0) {
                 float gx = (slot % CJK_COLS) * 16.0f, gy = (slot / CJK_COLS) * 16.0f;
                 float tw = (float)s_cjk.width, th = (float)s_cjk.height;
-                float x0 = (float)(int)(x + 0.5f), y0 = (float)(int)(y + 13.0f * scale - asc * k + 0.5f);   /* baselines level */
+                /* a character among the game font's: baselines level. A phrase in this font:
+                 * the 10 px characters (ink rows 3..11, a full cap height and more) centred
+                 * where the game font's mixed-case text looks centred, y + 10 * scale; on
+                 * its baseline they stood at the top of their rows (GitHub #91) */
+                float yc = small && font == TF_FUSION ? y + 10.0f * scale - 7.5f * k : y + 13.0f * scale - asc * k;
+                float x0 = (float)(int)(x + 0.5f), y0 = (float)(int)(yc + 0.5f);
                 quad2(&s_cjk, x0, y0, x0 + 16 * k, y0 + 16 * k, gx / tw, gy / th, (gx + 16) / tw, (gy + 16) / th, c, c);
             }
         }
@@ -1009,11 +1016,76 @@ static const char *cut_to(const char *s, float avail, float scale) {
     return cut;
 }
 
+/* Settings > Bigger text: the size text asked for at scale is drawn at. The game
+ * font's text (and the console font's Japanese) 1.2x, up to the game font's full
+ * size; Chinese in the 10 px pixel font takes the 12 px one (the pixel fonts are
+ * drawn 1:1, not scaled). Full-size text (titles, buttons) stays. The callers'
+ * fit() and cut_to() keep it within its row: a smaller size, or the font before. */
+static float big_scale(const char *s, float scale) {
+    if (!pm3ds_cfg.big_text || scale >= 1.0f) return scale;
+    int font = text_font(s, scale);
+    if (font == TF_FUSION || font == TF_ROM) return scale < 0.9f ? 0.92f : scale;
+    return scale * 1.2f < 1.0f ? scale * 1.2f : 1.0f;
+}
+
+/* how far below its y text at scale in font has the middle of its letters (font_glyph) */
+static float text_mid(int font, float scale) {
+    float k;
+    if (font == TF_FUSION && scale >= 0.9f) {   /* 12 px, on the game font's baseline */
+        k = scale <= 1.15f ? 1.0f : scale;
+        return 13.0f * scale - (PM3DS_CJK12_ASCENT - 8.5f) * k;
+    }
+#if VERSION_IQUE
+    if (font == TF_ROM) {   /* the ROM's 16-pixel cell */
+        k = scale >= 0.95f && scale <= 1.25f ? 1.0f : scale;
+        return 7.5f * k;
+    }
+#endif
+    return 10.0f * scale;   /* the game font's mixed-case text, the 10 px pixel font's characters */
+}
+
+/* y for s drawn at sc where it was laid out at scale (Bigger text): its middle stays */
+static float big_y(const char *s, float y, float scale, float sc) {
+    if (!pm3ds_cfg.big_text || sc == scale) return y;
+    return y + text_mid(text_font(s, scale), scale) - text_mid(text_font(s, sc), sc);
+}
+
+/* the face of the last row (tile, card) or chip drawn: Bigger text keeps a row's
+ * text inside it (x0, y0, x1, y1) */
+static float s_box[4];
+
+/* the size s laid out at scale at (x, *y) is drawn at, and its y: with Bigger text
+ * larger (big_scale), within avail (fit) and, in a row, no taller than the row's
+ * face and in its middle */
+static float place(const char *s, float x, float *y, float avail, float scale, float lo) {
+    if (!pm3ds_cfg.big_text) return fit(s, avail, scale, lo);
+    float big = big_scale(s, scale), h = s_box[3] - s_box[1];
+    bool in_box = x >= s_box[0] && x <= s_box[2] && *y >= s_box[1] - 3 && *y < s_box[3] - 4;
+    if (in_box && big > scale) {
+        int font = text_font(s, big);
+        if (font == TF_FUSION || font == TF_ROM) {
+            if (h < 11.0f) big = scale;   /* the 12 px characters' 11 rows don't fit: the 10 px ones */
+        } else if (big * 13.0f > h) {     /* the game font's capitals to descenders: 13 rows a scale */
+            big = h / 13.0f > scale ? h / 13.0f : scale;
+        }
+    }
+    float sc = fit(s, avail, big, lo);
+    if (in_box && sc != scale) {
+        int font = text_font(s, sc);
+        /* the game font's capitals stand above its middle, descenders below: between them */
+        float mid = text_mid(font, sc) - (font == TF_FUSION || font == TF_ROM ? 0.0f : 0.5f * sc);
+        *y = (s_box[1] + s_box[3]) / 2 - mid;
+    } else {
+        *y = big_y(s, *y, scale, sc);
+    }
+    return sc;
+}
+
 /* text narrowed like fit() and, if even the smallest size is too wide, cut with ".."
  * (a long translation ran into the switch beside it, GitHub #85) */
 static float text_in(float x, float y, const char *s, float avail, float scale, float lo, int white, u32 c) {
     s = T(s);
-    float sc = fit(s, avail, scale, lo);
+    float sc = place(s, x, &y, avail, scale, lo);
     if (text_width_raw(s, sc) <= avail + 0.5f) return text(x, y, s, sc, white, c);
     return text(x, y, cut_to(s, avail, sc), sc, white, c);
 }
@@ -1021,7 +1093,7 @@ static float text_in(float x, float y, const char *s, float avail, float scale, 
 /* text_in, its end at x */
 static void text_right_in(float x, float y, const char *s, float avail, float scale, float lo, u32 c) {
     s = T(s);
-    float sc = fit(s, avail, scale, lo);
+    float sc = place(s, x - 1, &y, avail, scale, lo);
     if (text_width_raw(s, sc) > avail + 0.5f) s = cut_to(s, avail, sc);
     text(x - text_width_raw(s, sc), y, s, sc, 0, c);
 }
@@ -1029,17 +1101,19 @@ static void text_right_in(float x, float y, const char *s, float avail, float sc
 /* text_in, centred on cx */
 static void text_center_in(float cx, float y, const char *s, float avail, float scale, float lo, int white, u32 c) {
     s = T(s);
-    float sc = fit(s, avail, scale, lo);
+    float sc = place(s, cx, &y, avail, scale, lo);
     if (text_width_raw(s, sc) > avail + 0.5f) s = cut_to(s, avail, sc);
     text(cx - text_width_raw(s, sc) / 2, y, s, sc, white, c);
 }
 
 /* a label centred on cx, at scale; Chinese within avail (a smaller pixel font
- * or cut), not over the rim of its button (GitHub #85) */
+ * or cut), not over the rim of its button (GitHub #85); with Bigger text every
+ * label, a little smaller than asked at the least */
 static void label_center(float cx, float y, const char *s, float avail, float scale, u32 c) {
     s = T(s);
     int font = text_font(s, scale);
     if (font == TF_FUSION || font == TF_ROM) text_center_in(cx, y, s, avail, scale, scale, 0, c);
+    else if (pm3ds_cfg.big_text) text_center_in(cx, y, s, avail, scale, scale * 0.85f, 0, c);
     else text_center(cx, y, s, scale, 0, c);
 }
 
@@ -1047,6 +1121,7 @@ static void label_center(float cx, float y, const char *s, float avail, float sc
 static void card(float x0, float y0, float x1, float y1, u32 face) {
     round_rect(x0, y0, x1, y1, 6, COL_CARD_RIM);
     round_rect(x0 + 1, y0 + 1, x1 - 1, y1 - 1, 5, face);
+    s_box[0] = x0 + 1; s_box[1] = y0 + 1; s_box[2] = x1 - 1; s_box[3] = y1 - 1;
 }
 
 /* a raised tile: shadow, brown rim, face */
@@ -1054,13 +1129,18 @@ static void tile(float x0, float y0, float x1, float y1, float r, u32 face) {
     round_rect(x0 + 2, y0 + 2, x1 + 2, y1 + 2, r, COL_SHADOW);
     round_rect(x0, y0, x1, y1, r, COL_PANEL_EDGE);
     round_rect(x0 + 2, y0 + 2, x1 - 2, y1 - 2, r - 2, face);
+    s_box[0] = x0 + 2; s_box[1] = y0 + 2; s_box[2] = x1 - 2; s_box[3] = y1 - 2;
 }
 
 /* a small button with its label centred */
 static void chip(float x0, float y0, float x1, float y1, const char *label, u32 face, float scale) {
     round_rect(x0, y0, x1, y1, 7, COL_PANEL_EDGE);
     round_rect(x0 + 2, y0 + 2, x1 - 2, y1 - 2, 5, face);
+    float row[4];
+    memcpy(row, s_box, sizeof row);   /* the chip's face for its label, then the row it is on again */
+    s_box[0] = x0 + 2; s_box[1] = y0 + 2; s_box[2] = x1 - 2; s_box[3] = y1 - 2;
     label_center((x0 + x1) / 2, (y0 + y1) / 2 - 8 * scale, label, x1 - x0 - 6, scale, COL_WHITE);
+    memcpy(s_box, row, sizeof row);
 }
 
 static void page_title(const char *title, const char *sub) {
@@ -1285,6 +1365,10 @@ static void draw_stats(void) {
 #define MAP_Y1 199
 #define MAP_CENTRE_X0 (MAP_X1 - 62)
 #define MAP_CENTRE_Y0 (MAP_Y1 - 24)
+#define MAP_HINT_X0 (MAP_X1 - 72)     /* "Show hint", at the top right */
+#define MAP_HINT_Y0 (MAP_Y0 + 4)
+#define MAP_HINT_Y1 (MAP_Y0 + 22)
+#define MAP_HINT_CARD_Y0 (MAP_Y0 + 42)
 
 /* Tap a place on the map to see what its area still hides (Discord suggestion):
  * the pause map's spaces (GF_MAP_ToadTown + i order) to the tracker's areas */
@@ -1338,6 +1422,30 @@ static void area_counts(const pm3ds_tracker_area_t *a, float x, float y) {
     text(x + 91, y, buf, 0.7f, 1, COL_WHITE);
 }
 
+/* "Where to go next" (n64_shim/journal.c): behind its chip, a card under the location */
+static int wrap_text(const char *str, float scale, float width, short *start, short *len, int max);
+#define MAP_HINT_SCALE 0.72f
+#define MAP_HINT_LINE_H 12
+static void draw_map_hint(void) {
+    const char *label = s_map_hint ? "Hide hint" : "Show hint";
+    chip(MAP_HINT_X0, MAP_HINT_Y0, MAP_X1 - 4, MAP_HINT_Y1, label, COL_SEL, fit(label, MAP_X1 - 4 - MAP_HINT_X0 - 8, 0.72f, 0.5f));
+    const char *hint = s_map_hint ? pm3ds_story_hint() : NULL;
+    if (!hint) return;
+    hint = T(hint);
+    static short starts[6], lens[6];
+    int lines = wrap_text(hint, MAP_HINT_SCALE, MAP_X1 - MAP_X0 - 22, starts, lens, 6);
+    s_map_hint_y1 = MAP_HINT_CARD_Y0 + lines * MAP_HINT_LINE_H + 8;
+    round_rect(MAP_X0 + 4, MAP_HINT_CARD_Y0, MAP_X1 - 4, s_map_hint_y1, 7, COL_DARK_CHIP);
+    int font = text_font(hint, MAP_HINT_SCALE);
+    for (int l = 0; l < lines && s_font_ok; l++) {
+        char line[160];
+        int n = lens[l] < (int)sizeof line - 1 ? lens[l] : (int)sizeof line - 1;
+        memcpy(line, hint + starts[l], n);
+        line[n] = '\0';
+        text_as(MAP_X0 + 11, MAP_HINT_CARD_Y0 + 4 + l * MAP_HINT_LINE_H, line, MAP_HINT_SCALE, 1, COL_WHITE, true, font);
+    }
+}
+
 static void draw_map(void) {
     const pm3ds_hud_info_t *h = &s_info;
     const pm3ds_tracker_t *f = &s_found;
@@ -1373,8 +1481,9 @@ static void draw_map(void) {
     bool counts = f->here >= 0;
     float cw = text_width(h->location, 0.85f) + 14;
     if (counts && cw < 124) cw = 124;
+    if (cw > MAP_HINT_X0 - vx0 - 10) cw = MAP_HINT_X0 - vx0 - 10;   /* clear of "Show hint" */
     round_rect(vx0 + 4, vy0 + 4, vx0 + 4 + cw, vy0 + (counts ? 38 : 22), 7, COL_DARK_CHIP);
-    text(vx0 + 10, vy0 + 6, h->location, 0.85f, 1, COL_WHITE);
+    text_in(vx0 + 10, vy0 + 6, h->location, cw - 12, 0.85f, 0.55f, 1, COL_WHITE);
     if (counts) area_counts(&f->area[f->here], vx0 + 9, vy0 + 21);
     if (s_map_sel >= 0 && s_map_sel < h->map_count && h->map_visited[s_map_sel]) {
         /* the tapped place: a ring on its dot, its area's counts at the bottom left */
@@ -1393,6 +1502,7 @@ static void draw_map(void) {
         if (a >= 0) area_counts(&f->area[a], vx0 + 9, vy1 - 21);
         else text(vx0 + 10, vy1 - 21, "Nothing to find", 0.7f, 1, COL_WHITE);
     }
+    draw_map_hint();
     if (!s_map_follow) {
         chip(MAP_CENTRE_X0, MAP_CENTRE_Y0, vx1 - 4, vy1 - 4, "Centre", COL_SEL, 0.75f);
     } else if (!pm3ds_cfg.map_dragged && s_map_sel < 0) {   /* until the first drag */
@@ -1472,6 +1582,9 @@ static int s_log_hp, s_log_atk, s_log_def;                 /* from the open tatt
 #define LOG_PER_PAGE (LOG_ROWS * 2)
 #define LOG_TEXT_SCALE 0.8f
 #define LOG_LINE_H 15
+
+/* a paragraph's line height for its text drawn at sc instead of scale (Bigger text) */
+static int big_line_h(int h, float scale, float sc) { return sc == scale ? h : (int)(h * 1.2f + 0.5f); }
 #define LOG_TEXT_Y1 200
 
 /* word wrap: start/length of each line of str at scale within width */
@@ -1556,8 +1669,10 @@ static void draw_log(void) {
     if (s_log_open >= 0 && s_log_open < s_log.known) {   /* one tattle in full */
         static short starts[48], lens[48];
         float ty0 = log_has_stats() ? 66 : 38;
-        int per = (int)((LOG_TEXT_Y1 - ty0 - 8) / LOG_LINE_H);
-        int lines = wrap_text(s_log_text, LOG_TEXT_SCALE, CX1 - CX0 - 16, starts, lens, 48);
+        float ls = big_scale(s_log_text, LOG_TEXT_SCALE);
+        int lh = big_line_h(LOG_LINE_H, LOG_TEXT_SCALE, ls);
+        int per = (int)((LOG_TEXT_Y1 - ty0 - 8) / lh);
+        int lines = wrap_text(s_log_text, ls, CX1 - CX0 - 16, starts, lens, 48);
         int pages = pages_of(lines, per);
         if (s_log_text_page >= pages) s_log_text_page = 0;
         chip(CX0, HEAD_Y - 1, CX0 + 50, HEAD_Y + 19, "Back", COL_SEL, 0.85f);
@@ -1584,7 +1699,7 @@ static void draw_log(void) {
         for (int l = 0; l < per; l++) {
             int k = s_log_text_page * per + l;
             if (k >= lines) break;
-            text_line(CX0 + 8, ty0 + 6 + l * LOG_LINE_H, s_log_text, starts[k], lens[k], LOG_TEXT_SCALE);
+            text_line(CX0 + 8, ty0 + 6 + l * lh, s_log_text, starts[k], lens[k], ls);
         }
         return;
     }
@@ -1782,6 +1897,8 @@ static int s_dish_lines;
 #define DISH_DESC_SCALE 0.7f
 #define DISH_DESC_LINE_H 12
 #define DISH_DESC_LINES 3
+static float s_dish_scale = DISH_DESC_SCALE;   /* what the description was wrapped at (Bigger text) */
+static int s_dish_line_h = DISH_DESC_LINE_H;
 #define DISH_WAY_H 19
 
 static bool cook_known(int i) { return s_cook.done[i] || s_cook_all; }
@@ -1791,11 +1908,14 @@ static void cook_open(int i) {
     s_dish_page = 0;
     memcpy(s_dish_name, s_cook.name[i], sizeof s_dish_name);
     pm3ds_recipe_detail(s_cook.item[i], &s_dish);
-    s_dish_lines = wrap_text(s_dish.desc, DISH_DESC_SCALE, CX1 - CX0 - 12, s_dish_starts, s_dish_lens, DISH_DESC_LINES);
+    s_dish_scale = big_scale(s_dish.desc, DISH_DESC_SCALE);
+    s_dish_line_h = big_line_h(DISH_DESC_LINE_H, DISH_DESC_SCALE, s_dish_scale);
+    s_dish_lines = wrap_text(s_dish.desc, s_dish_scale, CX1 - CX0 - 12, s_dish_starts, s_dish_lens,
+                             DISH_DESC_LINES + (s_dish_scale != DISH_DESC_SCALE));   /* bigger text: a line more */
 }
 
 /* the ways list starts under the description */
-static float dish_ways_y0(void) { return DISH_DESC_Y + s_dish_lines * DISH_DESC_LINE_H + 8 + 16; }
+static float dish_ways_y0(void) { return DISH_DESC_Y + s_dish_lines * s_dish_line_h + 8 + 16; }
 static int dish_ways_per_page(void) { return (int)((PANEL_Y1 - 4 - dish_ways_y0()) / DISH_WAY_H); }
 
 /* ingredient k of a way: icon and name from x, within w; the x after it */
@@ -1832,9 +1952,9 @@ static void draw_dish(void) {
     bool done = s_cook.done[s_cook_open];
     text_right(CX1 - 2, 38, done ? "Cooked" : "Not cooked yet", 0.72f, done ? COL_DONE : COL_HINT);
     if (s_dish_lines > 0) {
-        card(CX0, DISH_DESC_Y - 2, CX1, DISH_DESC_Y + s_dish_lines * DISH_DESC_LINE_H + 4, COL_AREA);
+        card(CX0, DISH_DESC_Y - 2, CX1, DISH_DESC_Y + s_dish_lines * s_dish_line_h + 4, COL_AREA);
         for (int l = 0; l < s_dish_lines; l++) {
-            text_line(CX0 + 6, DISH_DESC_Y + l * DISH_DESC_LINE_H, s_dish.desc, s_dish_starts[l], s_dish_lens[l], DISH_DESC_SCALE);
+            text_line(CX0 + 6, DISH_DESC_Y + l * s_dish_line_h, s_dish.desc, s_dish_starts[l], s_dish_lens[l], s_dish_scale);
         }
     }
     float y = dish_ways_y0();
@@ -1869,8 +1989,12 @@ static void cook_entry_rect(int slot, float *x0, float *y0, float *x1, float *y1
 }
 
 /* ---- Chuck Quizmo's questions (GitHub #80), a page of the Recipes tab ---------- */
-#define QUIZ_X0 (CX1 - 64)                /* the Recipes <-> Quizzes chip, on the subtitle line */
-static bool s_quiz;                       /* the Recipes tab shows the quizzes */
+#define QUIZ_X0 (CX1 - 64)                /* the chip to the tab's next page, on the subtitle line */
+/* the Recipes tab's pages, in the order its chip steps through them */
+enum { CV_RECIPES, CV_QUIZ, CV_LETTERS, CV_ACH, CV_COUNT };
+static int s_cook_view;
+static void cook_view_chip(void);
+static bool cook_view_tap(int px, int py, int pages, int page);
 static bool s_quiz_spoil;                 /* show the answers of questions not asked yet */
 static int s_quiz_page, s_quiz_open = -1;
 static int s_quiz_done, s_quiz_tries, s_quiz_right;
@@ -1881,6 +2005,8 @@ static short s_quiz_starts[8], s_quiz_lens[8];
 static int s_quiz_lines;
 #define QUIZ_TEXT_SCALE 0.68f
 #define QUIZ_LINE_H 13
+static float s_quiz_scale = QUIZ_TEXT_SCALE;   /* what the question was wrapped at (Bigger text) */
+static int s_quiz_line_h = QUIZ_LINE_H;
 
 static void quiz_refresh(void) {
     pm3ds_quiz_stats(&s_quiz_done, &s_quiz_tries, &s_quiz_right);
@@ -1895,7 +2021,9 @@ static void quiz_open(int q) {
     s_quiz_open = q;
     pm3ds_quiz_question(q, s_quiz_text, sizeof s_quiz_text);
     pm3ds_quiz_options(q, s_quiz_opts);
-    s_quiz_lines = wrap_text(s_quiz_text, QUIZ_TEXT_SCALE, CX1 - CX0 - 12, s_quiz_starts, s_quiz_lens, 8);
+    s_quiz_scale = big_scale(s_quiz_text, QUIZ_TEXT_SCALE);
+    s_quiz_line_h = big_line_h(QUIZ_LINE_H, QUIZ_TEXT_SCALE, s_quiz_scale);
+    s_quiz_lines = wrap_text(s_quiz_text, s_quiz_scale, CX1 - CX0 - 12, s_quiz_starts, s_quiz_lens, 8);
 }
 
 static bool quiz_shown(int q) { return q < s_quiz_done || s_quiz_spoil; }
@@ -1908,11 +2036,11 @@ static void draw_quiz(void) {
         snprintf(buf, sizeof buf, T("Question %d"), q + 1);
         text(CX0 + 58, HEAD_Y, buf, 1.0f, 0, COL_WHITE);
         if (q >= s_quiz_done) text_right(CX1 - 2, HEAD_Y + 3, "Not asked yet", 0.68f, COL_HINT);
-        card(CX0, 36, CX1, 36 + s_quiz_lines * QUIZ_LINE_H + 6, COL_AREA);
+        card(CX0, 36, CX1, 36 + s_quiz_lines * s_quiz_line_h + 6, COL_AREA);
         for (int l = 0; l < s_quiz_lines; l++) {
-            text_line(CX0 + 6, 39 + l * QUIZ_LINE_H, s_quiz_text, s_quiz_starts[l], s_quiz_lens[l], QUIZ_TEXT_SCALE);
+            text_line(CX0 + 6, 39 + l * s_quiz_line_h, s_quiz_text, s_quiz_starts[l], s_quiz_lens[l], s_quiz_scale);
         }
-        float y = 36 + s_quiz_lines * QUIZ_LINE_H + 14;
+        float y = 36 + s_quiz_lines * s_quiz_line_h + 14;
         for (int k = 0; k < 3; k++) {
             bool right = quiz_shown(q) && k == pm3ds_quiz_right(q);
             tile(CX0, y, CX1, y + 20, 6, right ? COL_SEL : COL_TAB_ON);
@@ -1929,7 +2057,7 @@ static void draw_quiz(void) {
     text_in(CX0 + 2, SUB_Y, buf, QUIZ_X0 - CX0 - 6, 0.8f, 0.45f, 0, COL_SUB);
     chip(COOK_ALL_X0, HEAD_Y, COOK_ALL_X1, HEAD_Y + 18, s_quiz_spoil ? "Hide new" : "Spoilers",
          s_quiz_spoil ? COL_SEL : COL_OFF, 0.7f);
-    chip(QUIZ_X0, SUB_Y - 2, CX1, SUB_Y + 14, "Recipes", COL_TAB_ON, fit("Recipes", 56, 0.66f, 0.45f));
+    cook_view_chip();
     pager(s_quiz_page, pages);
     bar(CX0 + 2, BODY_Y, CX1 - CX0 - 2, 5, s_quiz_done, PM3DS_QUIZ_COUNT, COL_GOLD);
     for (int slot = 0; slot < COOK_PER_PAGE; slot++) {
@@ -1950,11 +2078,7 @@ static void quiz_tap(int px, int py) {
         if (in(px, py, CX0 - 4, HEAD_Y - 5, CX0 + 54, HEAD_Y + 23)) s_quiz_open = -1;
         return;
     }
-    if (pager_tap(px, py, s_quiz_page, pages_of(PM3DS_QUIZ_COUNT, COOK_PER_PAGE)) < 0 &&
-        in(px, py, QUIZ_X0 - 2, SUB_Y - 5, CX1 + 2, SUB_Y + 17)) {   /* the page arrows come first */
-        s_quiz = false;
-        return;
-    }
+    if (cook_view_tap(px, py, pages_of(PM3DS_QUIZ_COUNT, COOK_PER_PAGE), s_quiz_page)) return;
     if (in(px, py, COOK_ALL_X0 - 2, HEAD_Y - 4, COOK_ALL_X1 + 2, HEAD_Y + 22)) {
         s_quiz_spoil = !s_quiz_spoil;
         return;
@@ -1973,10 +2097,23 @@ static void quiz_tap(int px, int py) {
     }
 }
 
+static void draw_errands(void);
+static void draw_ach(void);
+static void errands_tap(int px, int py);
+static void ach_tap(int px, int py);
+
 static void draw_cook(void) {
     char buf[96];
-    if (s_quiz) {
+    if (s_cook_view == CV_QUIZ) {
         draw_quiz();
+        return;
+    }
+    if (s_cook_view == CV_LETTERS) {
+        draw_errands();
+        return;
+    }
+    if (s_cook_view == CV_ACH) {
+        draw_ach();
         return;
     }
     if (s_cook_open >= 0 && s_cook_open < s_cook.count) {
@@ -1990,7 +2127,7 @@ static void draw_cook(void) {
     page_title("Recipes", buf);
     chip(COOK_ALL_X0, HEAD_Y, COOK_ALL_X1, HEAD_Y + 18, s_cook_all ? "Hide new" : "Show all",
          s_cook_all ? COL_SEL : COL_OFF, 0.7f);
-    chip(QUIZ_X0, SUB_Y - 2, CX1, SUB_Y + 14, "Quizzes", COL_TAB_ON, fit("Quizzes", 56, 0.66f, 0.45f));
+    cook_view_chip();
     pager(s_cook_page, pages);
     bar(CX0 + 2, BODY_Y, CX1 - CX0 - 2, 5, s_cook.cooked, s_cook.count, COL_GOLD);
     for (int slot = 0; slot < COOK_PER_PAGE; slot++) {
@@ -2008,17 +2145,19 @@ static void draw_cook(void) {
 }
 
 static void cook_tap(int px, int py) {
-    if (s_quiz) {
+    if (s_cook_view == CV_QUIZ) {
         quiz_tap(px, py);
         return;
     }
-    if (s_cook_open < 0 && pager_tap(px, py, s_cook_page, pages_of(s_cook.count, COOK_PER_PAGE)) < 0 &&
-        in(px, py, QUIZ_X0 - 2, SUB_Y - 5, CX1 + 2, SUB_Y + 17)) {   /* the page arrows come first */
-        s_quiz = true;
-        s_quiz_open = -1;
-        quiz_refresh();
+    if (s_cook_view == CV_LETTERS) {
+        errands_tap(px, py);
         return;
     }
+    if (s_cook_view == CV_ACH) {
+        ach_tap(px, py);
+        return;
+    }
+    if (s_cook_open < 0 && cook_view_tap(px, py, pages_of(s_cook.count, COOK_PER_PAGE), s_cook_page)) return;
     if (s_cook_open >= 0) {
         if (in(px, py, CX0 - 4, HEAD_Y - 5, CX0 + 54, HEAD_Y + 23)) {
             s_cook_open = -1;
@@ -2045,6 +2184,193 @@ static void cook_tap(int px, int py) {
             return;
         }
     }
+}
+
+/* ---- the Recipes tab's other pages: letters and favors, achievements ---------- */
+/* Parakarry's letters and Koopa Koot's favors (one page, letters first), and the
+ * achievements (GitHub #88), from n64_shim/journal.c and achievements.c. Two-line
+ * rows: what, and who / how. Not yet found: ??? unless "Show all" (as on Recipes). */
+#define ROW2_Y0 52
+#define ROW2_H 30
+#define ROW2_ROWS 5
+#define ERR_LETTER_PAGES ((PM3DS_LETTER_COUNT + ROW2_ROWS - 1) / ROW2_ROWS)
+#define ERR_PAGES (ERR_LETTER_PAGES + (PM3DS_FAVOR_COUNT + ROW2_ROWS - 1) / ROW2_ROWS)
+static pm3ds_errands_t s_err;
+static int s_err_page;
+static bool s_err_all;
+static pm3ds_ach_list_t s_ach;
+static int s_ach_page;
+
+static void cook_view_refresh(void) {
+    switch (s_cook_view) {
+        case CV_RECIPES: pm3ds_recipe_query(&s_cook); break;
+        case CV_QUIZ:    quiz_refresh(); break;
+        case CV_LETTERS: pm3ds_errands_query(&s_err); break;
+        case CV_ACH:     pm3ds_ach_query(&s_ach); break;
+    }
+}
+
+/* the chip to the next page: Recipes, Quizzes, Letters, Achievements, Recipes... */
+static void cook_view_chip(void) {
+    static const char *const next[CV_COUNT] = { "Quizzes", "Letters", "Achievements", "Recipes" };
+    const char *l = next[s_cook_view];
+    chip(QUIZ_X0, SUB_Y - 2, CX1, SUB_Y + 14, l, COL_TAB_ON, fit(l, 56, 0.66f, 0.45f));
+}
+
+/* a tap on that chip (the page arrows come first): on to the next page */
+static bool cook_view_tap(int px, int py, int pages, int page) {
+    if (pager_tap(px, py, page, pages) >= 0 || !in(px, py, QUIZ_X0 - 2, SUB_Y - 5, CX1 + 2, SUB_Y + 17)) return false;
+    s_cook_view = (s_cook_view + 1) % CV_COUNT;
+    s_cook_open = -1;
+    s_quiz_open = -1;
+    cook_view_refresh();
+    return true;
+}
+
+/* one two-line row: icon (a dark silhouette unless lit), title, a smaller line under it, a word on the right */
+static void row2(float y0, const void *icon, bool lit, bool known, const char *title, const char *sub,
+                 const char *right, u32 right_c, u32 face) {
+    tile(CX0, y0, CX1, y0 + ROW2_H - 3, 6, face);
+    draw_icon(icon, CX0 + 5, y0 + 5, 17, lit ? COL_WHITE : RGBA(70, 45, 25, known ? 200 : 150));
+    float x = CX0 + 27, rw = right ? text_width(right, 0.62f) + 10 : 0;
+    u32 c = known ? COL_WHITE : RGBA(255, 255, 255, 170);
+    text_in(x, y0 + 1, title, CX1 - x - 4 - rw, 0.74f, 0.45f, 0, c);
+    if (sub && sub[0]) text_in(x, y0 + 14, sub, CX1 - x - 6, 0.6f, 0.42f, 0, COL_HINT);
+    if (right) text_right(CX1 - 6, y0 + 3, right, 0.62f, right_c);
+}
+
+static int favor_chapter(int i) {
+    static const unsigned char ch[PM3DS_FAVOR_COUNT] = { 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7 };
+    return ch[i];
+}
+
+static void draw_errands(void) {
+    char buf[PM3DS_UI_DESC + 8];
+    if (s_err_page >= ERR_PAGES) s_err_page = 0;
+    bool favors = s_err_page >= ERR_LETTER_PAGES;
+    if (!favors) {
+        snprintf(buf, sizeof buf, T("%d of %d delivered"), s_err.delivered, PM3DS_LETTER_COUNT);
+        text_in(CX0 + 2, HEAD_Y, "Letters", COOK_ALL_X0 - CX0 - 6, 1.05f, 0.6f, 0, COL_WHITE);   /* clear of Show all */
+        text_in(CX0 + 2, SUB_Y, buf, QUIZ_X0 - CX0 - 6, 0.8f, 0.5f, 0, COL_SUB);
+        bar(CX0 + 2, BODY_Y, CX1 - CX0 - 2, 5, s_err.delivered, PM3DS_LETTER_COUNT, COL_GOLD);
+    } else {
+        snprintf(buf, sizeof buf, T("%d of %d favors done"), s_err.favors_done, PM3DS_FAVOR_COUNT);
+        text_in(CX0 + 2, HEAD_Y, "Koopa Koot", COOK_ALL_X0 - CX0 - 6, 1.05f, 0.6f, 0, COL_WHITE);
+        text_in(CX0 + 2, SUB_Y, buf, QUIZ_X0 - CX0 - 6, 0.8f, 0.5f, 0, COL_SUB);
+        bar(CX0 + 2, BODY_Y, CX1 - CX0 - 2, 5, s_err.favors_done, PM3DS_FAVOR_COUNT, COL_GOLD);
+    }
+    chip(COOK_ALL_X0, HEAD_Y, COOK_ALL_X1, HEAD_Y + 18, s_err_all ? "Hide new" : "Show all",
+         s_err_all ? COL_SEL : COL_OFF, 0.7f);
+    cook_view_chip();
+    pager(s_err_page, ERR_PAGES);
+    for (int r = 0; r < ROW2_ROWS; r++) {
+        float y0 = ROW2_Y0 + r * ROW2_H;
+        if (!favors) {
+            int i = s_err_page * ROW2_ROWS + r;
+            if (i >= PM3DS_LETTER_COUNT) break;
+            const typeof(s_err.letter[0]) *l = &s_err.letter[i];
+            bool known = l->seen || s_err_all;
+            static const char *const word[] = { "Not yet", "In your bag", "Delivered" };
+            static const u32 face[] = { COL_TAB_ON, COL_SEL, COL_DONE_ROW };
+            row2(y0, l->icon, l->state != PM3DS_ERRAND_NOT_YET, known, known ? (l->to[0] ? l->to : "Letter") : "???",
+                 known ? l->from : "", (known || l->state) ? word[l->state] : NULL, l->state == PM3DS_ERRAND_DONE ? COL_DONE : COL_HINT,
+                 known ? face[l->state] : COL_OFF);
+        } else {
+            int i = (s_err_page - ERR_LETTER_PAGES) * ROW2_ROWS + r;
+            if (i >= PM3DS_FAVOR_COUNT) break;
+            const typeof(s_err.favor[0]) *f = &s_err.favor[i];
+            bool known = f->seen || s_err_all;
+            static const char *const word[] = { "Not yet", "In progress", "Done", "Gave up" };
+            static const u32 face[] = { COL_TAB_ON, COL_SEL, COL_DONE_ROW, COL_TAB_ON };
+            snprintf(buf, sizeof buf, "%d. %s", i + 1, known ? (f->what_en ? T(f->what_en) : f->what) : "???");
+            u32 rc = f->state == PM3DS_ERRAND_DONE ? COL_DONE : f->state == PM3DS_ERRAND_GAVE_UP ? COL_HP : COL_HINT;
+            row2(y0, f->icon, f->state == PM3DS_ERRAND_DONE || f->state == PM3DS_ERRAND_HELD, known, buf,
+                 chapter_label(favor_chapter(i)), (known || f->state) ? word[f->state] : NULL, rc, known ? face[f->state] : COL_OFF);
+        }
+    }
+}
+
+static void errands_tap(int px, int py) {
+    if (cook_view_tap(px, py, ERR_PAGES, s_err_page)) return;
+    if (in(px, py, COOK_ALL_X0 - 2, HEAD_Y - 4, COOK_ALL_X1 + 2, HEAD_Y + 22)) {
+        s_err_all = !s_err_all;
+        return;
+    }
+    int np = pager_tap(px, py, s_err_page, ERR_PAGES);
+    if (np >= 0) s_err_page = np;
+}
+
+static void draw_ach(void) {
+    char buf[64];
+    int pages = pages_of(s_ach.count, ROW2_ROWS);
+    if (s_ach_page >= pages) s_ach_page = 0;
+    snprintf(buf, sizeof buf, T("%d of %d earned"), s_ach.earned, s_ach.count);
+    text_in(CX0 + 2, HEAD_Y, "Achievements", 218 - CX0 - 6, 1.05f, 0.6f, 0, COL_WHITE);   /* clear of the pager */
+    text_in(CX0 + 2, SUB_Y, buf, QUIZ_X0 - CX0 - 6, 0.8f, 0.5f, 0, COL_SUB);
+    cook_view_chip();
+    pager(s_ach_page, pages);
+    bar(CX0 + 2, BODY_Y, CX1 - CX0 - 2, 5, s_ach.earned, s_ach.count, COL_GOLD);
+    for (int r = 0; r < ROW2_ROWS; r++) {
+        int i = s_ach_page * ROW2_ROWS + r;
+        if (i >= s_ach.count) break;
+        const typeof(s_ach.a[0]) *a = &s_ach.a[i];
+        bool known = a->earned || !a->hidden;
+        row2(ROW2_Y0 + r * ROW2_H, a->icon, a->earned, known, known ? a->name : "???", known ? a->how : "???",
+             a->earned ? "Earned" : NULL, COL_DONE, a->earned ? COL_DONE_ROW : known ? COL_TAB_ON : COL_OFF);
+    }
+}
+
+static void ach_tap(int px, int py) {
+    int pages = pages_of(s_ach.count, ROW2_ROWS);
+    if (cook_view_tap(px, py, pages, s_ach_page)) return;
+    int np = pager_tap(px, py, s_ach_page, pages);
+    if (np >= 0) s_ach_page = np;
+}
+
+/* an achievement just earned: a notice over the bottom of the page for a few seconds;
+ * a tap on it opens the Achievements page there */
+#define NOTICE_FRAMES 210
+#define NOTICE_H 36
+static bool battle_page(void);
+static float notice_y0(void) { return battle_page() ? 4 : 164; }   /* in battle: over the titles, clear of the pad and menus */
+static int s_notice = -1, s_notice_timer;
+static void lcd_light(bool on);
+static bool s_lcd_off;
+
+static void notice_tick(void) {
+    if (s_notice_timer > 0 && --s_notice_timer == 0) s_notice = -1;
+    if (s_notice_timer == 0 && s_info.in_game) {
+        int a = pm3ds_ach_next_notice();
+        if (a >= 0) {
+            s_notice = a;
+            s_notice_timer = NOTICE_FRAMES;
+            pm3ds_ach_query(&s_ach);
+            if (s_lcd_off) lcd_light(true);   /* Settings > Bottom screen: the light comes back for it */
+        }
+    }
+}
+
+static void draw_notice(void) {
+    if (s_notice < 0 || s_notice >= s_ach.count || !s_info.in_game) return;
+    const typeof(s_ach.a[0]) *a = &s_ach.a[s_notice];
+    float y0 = notice_y0();
+    round_rect(CX0 - 2, y0 + 2, CX1 + 4, y0 + NOTICE_H + 4, 8, COL_SHADOW);
+    round_rect(CX0 - 4, y0, CX1 + 2, y0 + NOTICE_H, 8, COL_DARK_CHIP);
+    draw_icon(a->icon, CX0 + 2, y0 + 8, 20, COL_WHITE);
+    text_in(CX0 + 28, y0 + 3, "Achievement earned!", CX1 - CX0 - 34, 0.68f, 0.45f, 1, COL_GOLD);
+    text_in(CX0 + 28, y0 + 17, a->name, CX1 - CX0 - 34, 0.85f, 0.5f, 1, COL_WHITE);
+}
+
+static bool notice_tap(int px, int py) {
+    if (s_notice < 0 || !in(px, py, CX0 - 4, notice_y0(), CX1 + 2, notice_y0() + NOTICE_H)) return false;
+    s_tab = TAB_COOK;
+    s_cook_view = CV_ACH;
+    s_cook_open = -1;
+    s_ach_page = s_notice / ROW2_ROWS;
+    pm3ds_ach_query(&s_ach);
+    s_notice = -1;
+    s_notice_timer = 0;
+    return true;
 }
 
 /* ---- battle page and touch menus ------------------------------------------ */
@@ -2634,6 +2960,11 @@ static void pad_held(int px, int py) {
     dx = px - PAD_B_X; dy = py - PAD_B_Y;
     if (dx * dx + dy * dy <= PAD_B_R * PAD_B_R) pm3ds_touch_pad |= 0x4000;
     if (in(px, py, s_pad_stick[0], s_pad_stick[1], s_pad_stick[2], s_pad_stick[3])) pm3ds_touch_stick_x = -80;
+    {   /* GitHub #64: Mega Shock and Hurricane want A and B together, which one finger
+         * can't do: there either button presses both (src/battle/action_cmd.c) */
+        extern bool pm3ds_action_command_wants_ab(void);
+        if ((pm3ds_touch_pad & 0xC000) && pm3ds_action_command_wants_ab()) pm3ds_touch_pad |= 0xC000;
+    }
 }
 
 /* a tap on the menu: true if it was used */
@@ -2684,13 +3015,14 @@ static const char *const s_text_names[TEXT_SPEEDS] = { "Normal", "Fast", "Instan
 /* The Settings page: a list in sections, dragged up and down (a scroll bar
  * shows where); a row changes its setting when tapped without dragging. */
 enum { OPT_LANG, OPT_SCREEN, OPT_FPS, OPT_3D, OPT_COLORS, OPT_TEXT, OPT_FF_SPEED, OPT_FF_BUTTON, OPT_DROPS, OPT_BEEP, OPT_DPAD,
-       OPT_AUTOSAVE, OPT_UPDATE, OPT_HUD, OPT_ICE, OPT_MUSIC, OPT_SFX, OPT_JUKEBOX, OPT_STEER_SPIN, OPT_STEER_JUMP, OPT_UPDATE_NOW, OPT_PACK, OPT_DIM, OPT_PAD, OPT_UNSTUCK, OPT_COUNT };
+       OPT_AUTOSAVE, OPT_UPDATE, OPT_HUD, OPT_ICE, OPT_MUSIC, OPT_SFX, OPT_JUKEBOX, OPT_STEER_SPIN, OPT_STEER_JUMP, OPT_UPDATE_NOW, OPT_PACK, OPT_DIM, OPT_PAD, OPT_UNSTUCK, OPT_BIG_TEXT,
+       OPT_RETRY, OPT_RESCUE, OPT_COUNT };
 #define OPT_HEADER 0x100          /* + section number */
 static const int s_opt_list[] = {
-    OPT_HEADER + 0, OPT_LANG, OPT_PACK, OPT_SCREEN, OPT_FPS, OPT_3D, OPT_COLORS, OPT_HUD, OPT_PAD, OPT_ICE, OPT_DIM,
-    OPT_HEADER + 1, OPT_TEXT, OPT_FF_SPEED, OPT_FF_BUTTON, OPT_AUTOSAVE, OPT_DROPS, OPT_BEEP, OPT_DPAD, OPT_STEER_SPIN, OPT_STEER_JUMP, OPT_UNSTUCK,
+    OPT_HEADER + 0, OPT_LANG, OPT_PACK, OPT_BIG_TEXT, OPT_SCREEN, OPT_FPS, OPT_3D, OPT_COLORS, OPT_HUD, OPT_PAD, OPT_ICE, OPT_DIM,
+    OPT_HEADER + 1, OPT_TEXT, OPT_FF_SPEED, OPT_FF_BUTTON, OPT_AUTOSAVE, OPT_DROPS, OPT_BEEP, OPT_DPAD, OPT_STEER_SPIN, OPT_STEER_JUMP, OPT_RETRY, OPT_UNSTUCK,
     OPT_HEADER + 2, OPT_MUSIC, OPT_SFX, OPT_JUKEBOX,
-    OPT_HEADER + 3, OPT_UPDATE_NOW, OPT_UPDATE,
+    OPT_HEADER + 3, OPT_UPDATE_NOW, OPT_UPDATE, OPT_RESCUE,
 };
 static const char *const s_opt_sections[] = { "Display", "Gameplay", "Sound", "System" };
 #define OPT_LIST_N (int)(sizeof s_opt_list / sizeof s_opt_list[0])
@@ -2784,6 +3116,7 @@ static void opt_value(int id, char *buf, size_t size) {
         case OPT_JUKEBOX:   v = pm3ds_jukebox_name(pm3ds_cfg.jukebox); break;
         case OPT_STEER_SPIN: v = pm3ds_cfg.steer_spin ? "On" : "Off"; break;
         case OPT_STEER_JUMP: v = pm3ds_cfg.steer_jump ? "On" : "Off"; break;
+        case OPT_BIG_TEXT:  v = pm3ds_cfg.big_text ? "On" : "Off"; break;
         case OPT_AUTOSAVE: {
             static const char *const names[PM3DS_AUTOSAVE_COUNT] = { "Off", "Each area", "5 min", "10 min", "15 min" };
             v = names[pm3ds_cfg.autosave % PM3DS_AUTOSAVE_COUNT];
@@ -2796,6 +3129,8 @@ static void opt_value(int id, char *buf, size_t size) {
         }
         case OPT_UPDATE:    v = pm3ds_cfg.update_check ? "On" : "Off"; break;
         case OPT_UNSTUCK:   v = unstuck_label(); break;
+        case OPT_RETRY:     v = pm3ds_cfg.retry_battle ? "On" : "Off"; break;
+        case OPT_RESCUE:    v = "Open"; break;
         case OPT_UPDATE_NOW:
             switch (pm3ds_update_state()) {
                 case PM3DS_UPD_RUNNING: v = "Checking..."; break;
@@ -2818,7 +3153,8 @@ static const char *const s_opt_labels[OPT_COUNT] = {
     "Language", "Screen", "Frame rate", "3D depth", "Colors", "Text speed", "Fast-forward speed", "Fast-forward button",
     "Heart & flower drops", "Low HP beep", "D-pad in menus", "Autosave", "Check at launch",
     "Battle HP/FP bar", "Ice Power effect", "Music", "Sound effects", "Jukebox", "Steerable spin", "Steerable jump",
-    "Check for updates", "Game text", "Bottom screen", "Battle touch pad", "Stuck? Back to the door",
+    "Check for updates", "Game text", "Bottom screen", "Battle touch pad", "Stuck? Back to the door", "Bigger text",
+    "Retry battle", "Restore an older save",
 };
 
 /* Quit game (in game, GitHub #67): back to the title, saving first or not.
@@ -2918,10 +3254,83 @@ static void jukebox_tap(int px, int py) {
     }
 }
 
+/* Restore an older save (n64_shim/save_rescue.c): the save's older copies and the
+ * backups from the last boots, one at a time; Restore asks Sure? first */
+extern int pm3ds_rescue_scan(void);
+extern bool pm3ds_rescue_describe(int i, int *file, char name[40], int *level, int *minutes, char *when, int size);
+extern int pm3ds_rescue_restore(int i);
+static bool s_rescue;
+static int s_rescue_n, s_rescue_pick, s_rescue_state, s_rescue_timer;   /* state: 0, 1 Sure?, 2 done, 3 failed */
+#define RESCUE_ROW_Y (OPT_Y0 + 28)
+
+static void rescue_open(void) {
+    s_rescue = true;
+    s_rescue_n = pm3ds_rescue_scan();
+    s_rescue_pick = 0;
+    s_rescue_state = 0;
+}
+
+static void rescue_tick(void) {
+    if (s_rescue_state != 0 && ++s_rescue_timer > 180) s_rescue_state = 0;
+}
+
+static void draw_rescue(void) {
+    char name[40], when[40], buf[96];
+    int file, level, minutes;
+    page_title("Restore an older save", NULL);
+    if (s_rescue_n <= 0 || !pm3ds_rescue_describe(s_rescue_pick, &file, name, &level, &minutes, when, sizeof when)) {
+        small_text_center((CX0 + CX1) / 2, RESCUE_ROW_Y + 30, "No older copies found.", 1.0f, COL_PANEL_EDGE);
+        button(s_btn_ff, "Back");
+        return;
+    }
+    tile(CX0, RESCUE_ROW_Y, CX1, RESCUE_ROW_Y + 30, 6, COL_TAB_ON);
+    text(CX0 + 10, RESCUE_ROW_Y + 5, "<", 1.1f, 0, COL_GOLD);
+    snprintf(buf, sizeof buf, T("File %d: %s"), file, name);
+    text_center_in((CX0 + CX1) / 2, RESCUE_ROW_Y + 7, buf, CX1 - CX0 - 60, 0.95f, 0.5f, 0, COL_WHITE);
+    text(CX1 - 20, RESCUE_ROW_Y + 5, ">", 1.1f, 0, COL_GOLD);
+    snprintf(buf, sizeof buf, T("Level %d, %d:%02d played"), level, minutes / 60, minutes % 60);
+    small_text_center((CX0 + CX1) / 2, RESCUE_ROW_Y + 40, buf, 1.0f, COL_PANEL_EDGE);
+    if (when[0]) snprintf(buf, sizeof buf, T("Backup from %s"), when);
+    else snprintf(buf, sizeof buf, "%s", T("Older copy in the save"));
+    small_text_center((CX0 + CX1) / 2, RESCUE_ROW_Y + 54, buf, 1.0f, COL_PANEL_EDGE);
+    snprintf(buf, sizeof buf, "%d / %d", s_rescue_pick + 1, s_rescue_n);
+    small_text_center((CX0 + CX1) / 2, RESCUE_ROW_Y + 68, buf, 1.0f, COL_HINT);
+    {
+        static const char *const labels[4] = { "Restore", "Sure?", "Restored", "Can't now" };
+        chip(CX0 + 40, RESCUE_ROW_Y + 86, CX1 - 40, RESCUE_ROW_Y + 110, labels[s_rescue_state & 3],
+             s_rescue_state == 1 ? RGBA(255, 196, 64, 255) : COL_GOLD, 0.9f);
+    }
+    if (s_rescue_state == 2)
+        small_text_center((CX0 + CX1) / 2, RESCUE_ROW_Y + 120, "Load it from the file screen.", 1.0f, COL_HINT);
+    button(s_btn_ff, "Back");
+}
+
+static void rescue_tap(int px, int py) {
+    if (s_rescue_n <= 0) return;
+    if (py >= RESCUE_ROW_Y && py < RESCUE_ROW_Y + 30) {
+        if (px < (CX0 + CX1) / 2) s_rescue_pick = (s_rescue_pick + s_rescue_n - 1) % s_rescue_n;
+        else s_rescue_pick = (s_rescue_pick + 1) % s_rescue_n;
+        s_rescue_state = 0;
+    } else if (in(px, py, CX0 + 36, RESCUE_ROW_Y + 82, CX1 - 36, RESCUE_ROW_Y + 114)) {
+        s_rescue_timer = 0;
+        if (s_rescue_state != 1) {
+            s_rescue_state = 1;
+        } else {
+            s_rescue_state = pm3ds_rescue_restore(s_rescue_pick) ? 2 : 3;
+            s_rescue_n = pm3ds_rescue_scan();
+            if (s_rescue_pick >= s_rescue_n) s_rescue_pick = 0;
+        }
+    }
+}
+
 static void draw_options(void) {
     char buf[128];
     if (s_juke) {
         draw_jukebox();
+        return;
+    }
+    if (s_rescue) {
+        draw_rescue();
         return;
     }
     float max = opt_scroll_max();
@@ -3016,6 +3425,7 @@ static void options_tap(int px, int py) {
                     return;
                 case OPT_STEER_SPIN: pm3ds_cfg.steer_spin = !pm3ds_cfg.steer_spin; break;
                 case OPT_STEER_JUMP: pm3ds_cfg.steer_jump = !pm3ds_cfg.steer_jump; break;
+                case OPT_BIG_TEXT: pm3ds_cfg.big_text = !pm3ds_cfg.big_text; break;
                 case OPT_AUTOSAVE: pm3ds_cfg.autosave = (uint8_t)((pm3ds_cfg.autosave + 1) % PM3DS_AUTOSAVE_COUNT); break;
                 case OPT_COLORS:
                     pm3ds_cfg.color_mode = (uint8_t)((pm3ds_cfg.color_mode + 1) % PM3DS_COLOR_COUNT);
@@ -3024,6 +3434,8 @@ static void options_tap(int px, int py) {
                 case OPT_UPDATE: pm3ds_cfg.update_check = !pm3ds_cfg.update_check; break;   /* from the next launch */
                 case OPT_UPDATE_NOW: pm3ds_update_check_now(); return;   /* GitHub #82 */
                 case OPT_UNSTUCK: unstuck_tap(); return;
+                case OPT_RETRY: pm3ds_cfg.retry_battle = !pm3ds_cfg.retry_battle; break;
+                case OPT_RESCUE: rescue_open(); return;
             }
             pm3ds_settings_save();
             return;
@@ -3299,11 +3711,12 @@ static void fm_page_tap(int px, int py) {
  * bottom one, +Control Pad / A / B / Y / START on either. */
 enum { NG_CLOSED, NG_MODE, NG_RANDO };
 enum { NG_SND_NONE, NG_SND_MOVE, NG_SND_NEXT, NG_SND_BACK, NG_SND_TOGGLE };   /* for the file menu to play */
-#define NG_TOGGLES 7
+#define NG_TOGGLES 8
 #define NG_ROW_SEED NG_TOGGLES
 #define NG_ROW_START (NG_TOGGLES + 1)
-#define NG_ROW_Y0 44
-#define NG_ROW_H 16
+#define NG_ROW_Y0 42   /* nine rows of 14 px over the help text (eight of 16 from 44 before door shuffle) */
+#define NG_ROW_H 14
+#define NG_HELP_Y 176
 static const struct { unsigned flag; const char *label, *help; } s_ng_toggles[NG_TOGGLES] = {
     { PM3DS_RANDO_COINS, "Coins & star pieces", "Coins and star pieces lying around are shuffled too." },
     { PM3DS_RANDO_KEYS, "Key items", "Key items move too, always somewhere you can reach before you need them." },
@@ -3312,6 +3725,8 @@ static const struct { unsigned flag; const char *label, *help; } s_ng_toggles[NG
     { PM3DS_RANDO_HIDDEN, "Keys in hidden spots", "Key items can also hide in hidden panels and blocks." },
     { PM3DS_RANDO_ENEMIES, "Enemies", "Every enemy group fights as another group from the same chapter." },
     { PM3DS_RANDO_BADGES, "Badge costs", "Badges swap their BP and FP costs. Speedy Spin stays." },
+    { PM3DS_RANDO_DOORS, "Door shuffle",
+      "Exits lead to other rooms of the same area. Some areas don't change." },
 };
 static int s_ng_page, s_ng_cursor, s_ng_result, s_ng_sound;
 static unsigned s_ng_flags, s_ng_seed;
@@ -3417,6 +3832,7 @@ static void ng_buttons(void) {
     u32 held = hidKeysHeld() & ~KEY_TOUCH;
     u32 kd = held & ~prev;
     prev = held;
+    if (held & KEY_SELECT) kd &= ~KEY_R;   /* Select + R: a screenshot (pm3ds_screenshot.c) */
     if (s_ng_hold && held == 0) s_ng_hold = false;
     if (s_ng_page == NG_CLOSED) return;
     if (s_ng_fresh) {
@@ -3546,10 +3962,10 @@ static void ng_button(float x0, float y0, float x1, float y1, const char *label,
 }
 
 /* the picker at width w (top 400, bottom 320), centred */
-/* the randomizer's rows are 16 px: the ROM's Chinese font fills all 16 (its
+/* the randomizer's rows are 14 px: the ROM's Chinese font fills 16 (its
  * text ran over the switches' edge, GitHub #85), the 12 px one fits */
 static float ng_row_scale(const char *s) {
-    return text_font(T(s), 1.0f) == TF_ROM ? 0.92f : 1.0f;
+    return text_font(T(s), 1.0f) == TF_ROM ? 0.8f : 1.0f;
 }
 
 static void draw_new_game(float w) {
@@ -3591,12 +4007,14 @@ static void draw_new_game(float w) {
         return;
     }
     text_center(dx + 160, 8, "Randomizer", 1.2f, 0, COL_WHITE);
-    small_text_center(dx + 160, 34, "Items and badges are always shuffled.", 1.0f, COL_PANEL_EDGE);
+    small_text_center(dx + 160, 31, "Items and badges are always shuffled.", 1.0f, COL_PANEL_EDGE);
     for (int row = 0; row <= NG_ROW_SEED; row++) {
         float y = NG_ROW_Y0 + row * NG_ROW_H;
         const char *value;
         if (row < NG_TOGGLES) {
-            value = (s_ng_flags & s_ng_toggles[row].flag) ? "On" : "Off";
+            value = !(s_ng_flags & s_ng_toggles[row].flag)          ? "Off"
+                    : s_ng_toggles[row].flag == PM3DS_RANDO_DOORS ? "In each area"
+                                                                  : "On";
         } else {
             if (s_ng_seed) snprintf(buf, sizeof buf, "%08X", s_ng_seed);
             value = s_ng_seed ? buf : "Random";
@@ -3607,19 +4025,19 @@ static void draw_new_game(float w) {
         if (s_ng_cursor == row) round_rect(dx + 10, y, dx + 310, y + NG_ROW_H, 8, RGBA(255, 214, 120, 150));
         const char *label = row < NG_TOGGLES ? s_ng_toggles[row].label : "Seed";
         float ls = ng_row_scale(label);
-        text(dx + 18, y + (ls < 1.0f ? 1 : 2), label, ls, 0, tint);
+        text(dx + 18, y + 1, label, ls, 0, tint);
         float vs = ng_row_scale(value), vw = text_width(value, vs) + 24;
         if (vw < 72) vw = 72;
         bool on = row < NG_TOGGLES && (s_ng_flags & s_ng_toggles[row].flag);
-        round_rect(dx + 302 - vw, y + 1, dx + 302, y + NG_ROW_H - 1, 9, COL_PANEL_EDGE);
-        round_rect(dx + 304 - vw, y + 3, dx + 300, y + NG_ROW_H - 3, 7,
+        round_rect(dx + 302 - vw, y + 0.5f, dx + 302, y + NG_ROW_H - 0.5f, 9, COL_PANEL_EDGE);
+        round_rect(dx + 304 - vw, y + 2, dx + 300, y + NG_ROW_H - 2, 7,
                    (row == NG_ROW_SEED || on) && !idle ? RGBA(255, 214, 120, 255) : RGBA(205, 190, 170, 255));
-        text_center(dx + 302 - vw / 2, y + (vs < 1.0f ? 1 : 2), value, vs, 0, tint);
+        text_center(dx + 302 - vw / 2, y + 1, value, vs, 0, tint);
     }
     const char *help = s_ng_cursor < NG_TOGGLES ? s_ng_toggles[s_ng_cursor].help
                        : s_ng_cursor == NG_ROW_SEED ? "A: type a seed, Y: random. Same seed and settings, same game."
                                                     : "START or A: begin. B: back.";
-    ng_help(dx + 160, 176, help);
+    ng_help(dx + 160, NG_HELP_Y, help);
     ng_button(dx + 8, 212, dx + 88, 234, "Back", false);
     ng_button(dx + 196, 212, dx + 312, 234, "Start", s_ng_cursor == NG_ROW_START);
 }
@@ -3687,11 +4105,40 @@ static void draw_import_notice(void) {
     ng_button(UPD_OK_X0, UPD_BTN_Y0, UPD_OK_X1, UPD_BTN_Y1, "OK", false);
 }
 
+/* ---- Retry battle (Settings > Retry battle, n64_shim/retry_battle.c) ---------- */
+/* a lost fight that would end in a Game Over waits for this choice */
+extern volatile int pm3ds_retry_tap;
+extern bool pm3ds_retry_prompt_up(void);
+static bool retry_notice_up(void) { return pm3ds_retry_prompt_up(); }
+#define RETRY_GO_X0 22      /* Game over */
+#define RETRY_GO_X1 146
+#define RETRY_RE_X0 164     /* Retry battle */
+#define RETRY_RE_X1 298
+
+static void draw_retry_notice(void) {
+    fill(0, 0, 320, 240, RGBA(40, 20, 0, 150));
+    panel(10, 28, 310, 200, COL_PANEL);
+    text_center(160, 38, "Lost the battle", 1.2f, 0, COL_WHITE);
+    small_text_center(160, 84, "Retry battle starts this fight again", 1.0f, COL_PANEL_EDGE);
+    small_text_center(160, 96, "with what you had when it began.", 1.0f, COL_PANEL_EDGE);
+    ng_button(RETRY_GO_X0, UPD_BTN_Y0, RETRY_GO_X1, UPD_BTN_Y1, "Game over (B)", false);
+    ng_button(RETRY_RE_X0, UPD_BTN_Y0, RETRY_RE_X1, UPD_BTN_Y1, "Retry battle (A)", true);
+}
+
+/* the same two choices on the top screen, over the black screen the fight ended on */
+static void draw_retry_top(void) {
+    panel(90, 168, 310, 226, COL_PANEL);
+    text_center(200, 174, "Lost the battle", 0.9f, 0, COL_WHITE);
+    text_center(200, 198, "A: Retry battle    B: Game over", 0.75f, 0, COL_WHITE);
+}
+
 static void draw_menu_page(void);
 static void draw_menu(void) {
     draw_menu_page();
-    if (import_notice_up()) draw_import_notice();
+    if (retry_notice_up()) draw_retry_notice();
+    else if (import_notice_up()) draw_import_notice();
     else if (update_notice_up()) draw_update_notice();
+    else if (s_ng_page == NG_CLOSED && s_tab != TAB_DEBUG) draw_notice();   /* an achievement just earned */
 }
 
 static void draw_menu_page(void) {
@@ -3771,8 +4218,8 @@ static void select_tab(int tab) {
     if (tab == TAB_STATS || tab == TAB_MAP || tab == TAB_FOUND) pm3ds_tracker_query(&s_found);
     if (tab == TAB_FOUND && s_found.here >= 0) s_found_page = s_found.here / FOUND_ROWS;
     if (tab == TAB_FOUND) s_found_open = -1;
-    if (tab == TAB_MAP) s_map_follow = true;
-    if (tab == TAB_COOK) { s_cook_open = -1; s_quiz_open = -1; pm3ds_recipe_query(&s_cook); if (s_quiz) quiz_refresh(); }
+    if (tab == TAB_MAP) { s_map_follow = true; s_map_hint = false; }   /* the hint stays behind its tap */
+    if (tab == TAB_COOK) { s_cook_open = -1; s_quiz_open = -1; pm3ds_recipe_query(&s_cook); cook_view_refresh(); }
     if (tab == TAB_BADGES) { s_badge_msg_timer = 0; s_loadout_saving = false; badges_refresh(); }
 }
 
@@ -3866,7 +4313,7 @@ static void handle_touch(void) {
     {   /* the Settings list: drag to scroll, a tap acts on release */
         static bool opt_held;
         static int opt_x0, opt_y0, opt_prev_y, opt_moved;
-        bool on_list = s_tab == TAB_OPTIONS && !s_quit && !s_juke && s_ng_page == NG_CLOSED && !import_notice_up() && !update_notice_up();
+        bool on_list = s_tab == TAB_OPTIONS && !s_quit && !s_juke && !s_rescue && s_ng_page == NG_CLOSED && !import_notice_up() && !update_notice_up();
         if (pressed && on_list && in(tp.px, tp.py, CX0 - 4, OPT_Y0, CX1 + 4, OPT_LIST_Y1)) {
             opt_held = true;
             opt_x0 = tp.px; opt_y0 = opt_prev_y = tp.py;
@@ -3899,7 +4346,9 @@ static void handle_touch(void) {
         }
     }
     static bool map_press_on_centre;   /* the press began on Centre, which sets s_map_follow at once */
-    if (pressed) map_press_on_centre = !s_map_follow && in(tp.px, tp.py, MAP_CENTRE_X0, MAP_CENTRE_Y0, MAP_X1, MAP_Y1);
+    if (pressed) map_press_on_centre = (!s_map_follow && in(tp.px, tp.py, MAP_CENTRE_X0, MAP_CENTRE_Y0, MAP_X1, MAP_Y1)) ||
+                                       in(tp.px, tp.py, MAP_HINT_X0 - 2, MAP_HINT_Y0 - 4, MAP_X1, MAP_HINT_Y1 + 4) ||
+                                       (s_map_hint && in(tp.px, tp.py, MAP_X0, MAP_HINT_CARD_Y0, MAP_X1, s_map_hint_y1));
     if (released && drag_dist <= 4 && s_tab == TAB_MAP && s_info.in_game && !tm_open() &&
         in(last_x, last_y, MAP_X0, MAP_Y0, MAP_X1, MAP_Y1) && !map_press_on_centre) {
         int sp = map_space_at(last_x, last_y);   /* a tap on a place: its counts; elsewhere: off */
@@ -3908,6 +4357,13 @@ static void handle_touch(void) {
     }
     if (down) { last_x = tp.px; last_y = tp.py; }
 
+    if (retry_notice_up()) {   /* Retry battle or Game over: every tap goes to it */
+        pm3ds_touch_pad = 0;
+        pm3ds_touch_stick_x = 0;
+        if (pressed && in(tp.px, tp.py, RETRY_RE_X0, UPD_BTN_Y0, RETRY_RE_X1, UPD_BTN_Y1)) pm3ds_retry_tap = 1;
+        else if (pressed && in(tp.px, tp.py, RETRY_GO_X0, UPD_BTN_Y0, RETRY_GO_X1, UPD_BTN_Y1)) pm3ds_retry_tap = 2;
+        return;
+    }
     if (import_notice_up()) {   /* the notices take every tap until they are closed */
         pm3ds_touch_pad = 0;
         pm3ds_touch_stick_x = 0;
@@ -3941,6 +4397,7 @@ static void handle_touch(void) {
         ng_touch(tp.px, tp.py);
         return;
     }
+    if (s_info.in_game && !battle_page() && s_tab != TAB_DEBUG && notice_tap(tp.px, tp.py)) return;
 
     if (s_tab == TAB_DEBUG) {
         if (in(tp.px, tp.py, 250, 214, 316, 236)) s_tab = TAB_OPTIONS;
@@ -3952,6 +4409,7 @@ static void handle_touch(void) {
         int ids[4], r = s_quit ? -1 : rail_hit(tp.px, tp.py, opt_rail(tabs, ids));
         if (r >= 0) {
             s_juke = false;
+            s_rescue = false;
             s_tab = ids[r];
             return;
         }
@@ -3979,6 +4437,11 @@ static void handle_touch(void) {
         if (s_juke) {
             if (back) s_juke = false;
             else jukebox_tap(tp.px, tp.py);
+            return;
+        }
+        if (s_rescue) {
+            if (back) s_rescue = false;
+            else rescue_tap(tp.px, tp.py);
             return;
         }
         if (s_quit) {
@@ -4050,6 +4513,8 @@ static void handle_touch(void) {
     } else if (s_info.in_game && !s_info.in_battle && s_tab == TAB_PARTY && partner_at(tp.px, tp.py)) {
         int id = partner_at(tp.px, tp.py);
         if ((s_info.partners_owned >> id) & 1) pm3ds_touch_req = 0x100 + id;
+    } else if (s_info.in_game && s_tab == TAB_MAP && !tm_open() && in(tp.px, tp.py, MAP_HINT_X0 - 2, MAP_HINT_Y0 - 4, MAP_X1, MAP_HINT_Y1 + 4)) {
+        s_map_hint = !s_map_hint;
     } else if (s_tab == TAB_MAP && !s_map_follow && in(tp.px, tp.py, MAP_CENTRE_X0, MAP_CENTRE_Y0, MAP_X1, MAP_Y1)) {
         s_map_follow = true;
     }
@@ -4103,7 +4568,9 @@ void pm3ds_bottom_screen_tick(unsigned frame) {
     if (!s_font_ok && (frame % 30) == 0) build_font();
     if (frame % 5 == 0) pm3ds_hud_query(&s_info);
     qs_tick();
+    notice_tick();
     unstuck_tick();
+    rescue_tick();
     if (!s_info.in_game) s_quit = 0;
     quit_tick();
     if (s_badge_msg_timer > 0) s_badge_msg_timer--;
@@ -4113,6 +4580,8 @@ void pm3ds_bottom_screen_tick(unsigned frame) {
         if (s_tab == TAB_STATS || s_tab == TAB_MAP || s_tab == TAB_FOUND) pm3ds_tracker_query(&s_found);
         if (s_tab == TAB_FOUND && s_found_open >= 0) pm3ds_tracker_spots(s_found_open, &s_spots);
         if (s_tab == TAB_COOK && s_cook_open < 0) pm3ds_recipe_query(&s_cook);
+        if (s_tab == TAB_COOK && s_cook_view == CV_LETTERS) pm3ds_errands_query(&s_err);
+        if (s_tab == TAB_COOK && s_cook_view == CV_ACH) pm3ds_ach_query(&s_ach);
         if (s_tab == TAB_BADGES) pm3ds_badge_query(&s_badges);
     }
     pm3ds_tm_get(&s_tm);
@@ -4149,6 +4618,7 @@ static bool begin_ui_on(C3D_RenderTarget *t, const C3D_Mtx *m, bool after) {
     if (!after) s_vcount = 0;
     s_batch_start = s_vcount;
     s_cur_tex = NULL;
+    memset(s_box, 0, sizeof s_box);   /* no row yet this frame (Bigger text) */
     return true;
 }
 
@@ -4161,14 +4631,35 @@ static void end_ui(void) {
 
 /* inside a citro3d frame, after the top screen; top, top_right: its render
  * targets (top_right NULL without 3D), for the new-game picker */
+/* the bottom screen's render target (platform/pm3ds_screenshot.c) */
+C3D_RenderTarget *pm3ds_bottom_screen_target(void) { return s_target; }
+
+/* "Screenshot saved" for two seconds over whatever the bottom screen shows */
+static void draw_shot_notice(void) {
+    extern int pm3ds_screenshot_result(void);
+    static int result;
+    static u64 until;   /* osGetTime(): the bottom screen isn't drawn every frame on an Old 3DS */
+    int r = pm3ds_screenshot_result();
+    if (r != 0) {
+        result = r;
+        until = osGetTime() + 2000;
+    }
+    if (result == 0 || osGetTime() >= until) return;
+    const char *msg = result > 0 ? "Screenshot saved" : "Screenshot failed";
+    float w = text_width(msg, 0.8f) + 20;
+    round_rect(160 - w / 2, 214, 160 + w / 2, 234, 9, COL_DARK_CHIP);
+    text_center(160, 216, msg, 0.8f, 1, COL_WHITE);
+}
+
 void pm3ds_bottom_screen_render(C3D_RenderTarget *top, C3D_RenderTarget *top_right) {
     bool after = false;
     s_ui_frame++;
-    if (s_ng_page != NG_CLOSED) {
+    if (s_ng_page != NG_CLOSED || retry_notice_up()) {
         C3D_RenderTarget *eyes[2] = { top, top_right };
         for (int i = 0; i < 2; i++) {
             if (eyes[i] && begin_ui_on(eyes[i], &s_mtx_top, after)) {
-                draw_new_game(400);
+                if (s_ng_page != NG_CLOSED) draw_new_game(400);
+                else draw_retry_top();
                 after = true;
             }
         }
@@ -4178,6 +4669,7 @@ void pm3ds_bottom_screen_render(C3D_RenderTarget *top, C3D_RenderTarget *top_rig
         return;
     }
     draw_menu();
+    draw_shot_notice();
     end_ui();
 }
 

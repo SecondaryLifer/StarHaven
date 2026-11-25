@@ -13,6 +13,8 @@
  *   shops           shops trade their stock with the world (below)
  *   gifts           NPC gifts join the pool
  *   hidden          key items may also go to hidden panels and hidden blocks
+ *   doors           two-way exits lead to other rooms of the same area
+ *                   (rando_doors.c), each room still opening when it did
  * Gear, partners and star spirits always keep their places, and so do the
  * plain items the story asks for: the Flower Fields berries, Tayce T.'s
  * Cake (chapter 4) and Dry Dry Outpost's password goods (chapter 2).
@@ -320,6 +322,14 @@ static const char* item_name(s32 item) {
 
 static u8 sMoveBP[], sMoveFP[];
 const char* pm3ds_map_place(const char* map, char* buf, int size);   /* journal.c */
+/* rando_doors.c */
+int pm3ds_doors_build(unsigned seed, int on);
+int pm3ds_doors_redirect(const char* fromMap, const char** toMap, int* toEntry);
+void pm3ds_doors_spoiler(FILE* f, const char* (*place)(const char* map, char* buf, int size));
+
+static void build_doors(void) {
+    pm3ds_doors_build(sSeed, (sFlags & PM3DS_RANDO_DOORS) != 0);
+}
 
 static void write_spoiler(void) {
     char path[96], place[48];
@@ -331,12 +341,13 @@ static void write_spoiler(void) {
     if (f == nullptr) {
         return;
     }
-    fprintf(f, "%s randomizer, seed %08lX\nPlaces are the area and the game's name for the room (iwa_03 is a room of Mt. Rugged).\nShuffled: items, badges%s%s%s%s%s%s%s\n\n", PM3DS_APP_NAME,
+    fprintf(f, "%s randomizer, seed %08lX\nPlaces are the area and the game's name for the room (iwa_03 is a room of Mt. Rugged).\nShuffled: items, badges%s%s%s%s%s%s%s%s\n\n", PM3DS_APP_NAME,
             (unsigned long)sSeed, (sFlags & PM3DS_RANDO_COINS) ? ", coins, star pieces" : "",
             (sFlags & PM3DS_RANDO_KEYS) ? ", key items" : "",
             (sFlags & PM3DS_RANDO_KEYS) && (sFlags & PM3DS_RANDO_HIDDEN) ? " (hidden spots too)" : "",
             (sFlags & PM3DS_RANDO_SHOPS) ? ", shops" : "", (sFlags & PM3DS_RANDO_GIFTS) ? ", NPC gifts" : "",
-            (sFlags & PM3DS_RANDO_ENEMIES) ? ", enemies" : "", (sFlags & PM3DS_RANDO_BADGES) ? ", badge costs" : "");
+            (sFlags & PM3DS_RANDO_ENEMIES) ? ", enemies" : "", (sFlags & PM3DS_RANDO_BADGES) ? ", badge costs" : "",
+            (sFlags & PM3DS_RANDO_DOORS) ? ", doors (in each area)" : "");
     if (sFlags & PM3DS_RANDO_KEYS) {
         fprintf(f, "Key items:\n");
         for (i = 0; i < NUM_LOCS; i++) {
@@ -373,6 +384,7 @@ static void write_spoiler(void) {
             }
         }
     }
+    pm3ds_doors_spoiler(f, pm3ds_map_place);
     fclose(f);
 }
 
@@ -796,6 +808,25 @@ s32 pm3ds_rando_battle(s32 battle, s32* stage) {
     return battle;
 }
 
+/* src/evt/map_api.c, goto_map (GotoMap and its kin), before the map change: the door
+ * shuffle's destination for a door taken here (not in the title screen's demo) */
+void pm3ds_rando_door(s16* areaID, s16* mapID, s32* entryID) {
+    GameStatus* gs = gGameStatusPtr;
+    const char* to;
+    int entry = *entryID;
+    s16 a, m;
+
+    if (!(sFlags & PM3DS_RANDO_DOORS) || gs->demoState != DEMO_STATE_NONE || gs->areaID < 0 || *areaID < 0) {
+        return;
+    }
+    to = gAreas[*areaID].maps[*mapID].id;
+    if (pm3ds_doors_redirect(gAreas[gs->areaID].maps[gs->mapID].id, &to, &entry) && get_map_IDs_by_name(to, &a, &m)) {
+        *areaID = a;
+        *mapID = m;
+        *entryID = entry;
+    }
+}
+
 /* src/main_loop.c etc., clear_saved_variables: a fresh state is unrandomized */
 void pm3ds_rando_off(void) {
     sFlags = 0;
@@ -804,6 +835,7 @@ void pm3ds_rando_off(void) {
     build();
     build_enemies();
     build_badge_costs();
+    build_doors();
 }
 
 /* platform/bottom_screen.c, new-game picker */
@@ -822,6 +854,10 @@ void pm3ds_rando_new_game(void) {
     sNextSeed = PM3DS_RANDO_SEED;
 #endif
 #endif
+#ifdef PM3DS_RANDO_DOORS_TEST   /* debug: -DPM3DS_RANDO_DOORS_TEST=0x<seed>: a New Game shuffles items and doors with it */
+    sNextFlags = PM3DS_RANDO_ON | PM3DS_RANDO_DOORS;
+    sNextSeed = PM3DS_RANDO_DOORS_TEST;
+#endif
     if (sNextFlags == 0) {
         pm3ds_rando_off();
         return;
@@ -835,6 +871,7 @@ void pm3ds_rando_new_game(void) {
     build();
     build_enemies();
     build_badge_costs();
+    build_doors();
     write_spoiler();
 }
 
@@ -858,6 +895,7 @@ void pm3ds_rando_deserialize(const void* src) {
         build();
     build_enemies();
     build_badge_costs();
+    build_doors();
     } else if (b.magic == RANDO_MAGIC && (b.version == 2 || b.version == 3) && (b.flags & PM3DS_RANDO_ON)) {
         sFlags = (u32)b.flags & PM3DS_RANDO_ALL;
         if (b.version == 2) {
@@ -867,6 +905,7 @@ void pm3ds_rando_deserialize(const void* src) {
         build();
     build_enemies();
     build_badge_costs();
+    build_doors();
     } else {
         pm3ds_rando_off();
     }

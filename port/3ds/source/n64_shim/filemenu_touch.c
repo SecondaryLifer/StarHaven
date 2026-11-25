@@ -159,6 +159,11 @@ static void name_of(char out[40], const u8* name) {
     out[last] = 0;
 }
 
+/* n64_shim/save_rescue.c: a saved copy's file name */
+void pm3ds_fm_name_of(char out[40], const u8* name) {
+    name_of(out, name);
+}
+
 void pm3ds_fm_query(pm3ds_fm_info_t* q) {
     MenuPanel* main = filemenu_menus[FILE_MENU_MAIN];
     MenuPanel* input = filemenu_menus[FILE_MENU_INPUT_NAME];

@@ -94,6 +94,8 @@ void pm3ds_settings_load(void) {
     pm3ds_cfg.jukebox = -1;
     pm3ds_cfg.steer_spin = false;
     pm3ds_cfg.steer_jump = false;
+    pm3ds_cfg.big_text = false;
+    pm3ds_cfg.retry_battle = true;
     pm3ds_cfg.dpad_menus = true;
     pm3ds_cfg.language = -1;
     pm3ds_cfg.lang_pack[0] = '\0';
@@ -123,6 +125,8 @@ void pm3ds_settings_load(void) {
             else if (sscanf(line, "jukebox=%d", &v) == 1) pm3ds_cfg.jukebox = v;
             else if (sscanf(line, "steer_spin=%d", &v) == 1) pm3ds_cfg.steer_spin = v != 0;
             else if (sscanf(line, "steer_jump=%d", &v) == 1) pm3ds_cfg.steer_jump = v != 0;
+            else if (sscanf(line, "big_text=%d", &v) == 1) pm3ds_cfg.big_text = v != 0;
+            else if (sscanf(line, "retry_battle=%d", &v) == 1) pm3ds_cfg.retry_battle = v != 0;
             else if (sscanf(line, "dpad_menus=%d", &v) == 1) pm3ds_cfg.dpad_menus = v != 0;
             else if (sscanf(line, "autosave=%d", &v) == 1 && v >= 0 && v < PM3DS_AUTOSAVE_COUNT) pm3ds_cfg.autosave = (uint8_t)v;
             else if (sscanf(line, "color_mode=%d", &v) == 1 && v >= 0 && v < PM3DS_COLOR_COUNT) pm3ds_cfg.color_mode = (uint8_t)v;
@@ -171,6 +175,8 @@ void pm3ds_settings_save(void) {
     fprintf(f, "jukebox=%d\n", pm3ds_cfg.jukebox);
     fprintf(f, "steer_spin=%d\n", pm3ds_cfg.steer_spin);
     fprintf(f, "steer_jump=%d\n", pm3ds_cfg.steer_jump);
+    fprintf(f, "big_text=%d\n", pm3ds_cfg.big_text);
+    fprintf(f, "retry_battle=%d\n", pm3ds_cfg.retry_battle);
     fprintf(f, "dpad_menus=%d\n", pm3ds_cfg.dpad_menus);
     fprintf(f, "lang_pack=%s\n", pm3ds_cfg.lang_pack);
     fprintf(f, "color_mode=%d\n", pm3ds_cfg.color_mode);
@@ -212,4 +218,5 @@ bool pm3ds_battle_hud_on(void) { return pm3ds_cfg.battle_hud; }   /* src/invento
 bool pm3ds_ice_fx_on(void) { return pm3ds_cfg.ice_fx; }   /* src/battle/dmg_player.c */
 bool pm3ds_steer_spin(void) { return pm3ds_cfg.steer_spin; }   /* src/world/action/spin.c */
 bool pm3ds_steer_jump(void) { return pm3ds_cfg.steer_jump; }   /* src/7BB60.c */
+bool pm3ds_retry_battle_on(void) { return pm3ds_cfg.retry_battle; }   /* n64_shim/retry_battle.c */
 bool pm3ds_hp_beep_on(void) { return pm3ds_cfg.hp_beep; }   /* src/hud_element.c */

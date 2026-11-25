@@ -14,8 +14,8 @@
 /* release version: shown on the bottom screen and in the log; the CIA's
  * title version comes from these numbers too (tools/package.sh) */
 #define PM3DS_VERSION_MAJOR  1
-#define PM3DS_VERSION_MINOR  3
-#define PM3DS_VERSION_MICRO 15
+#define PM3DS_VERSION_MINOR  4
+#define PM3DS_VERSION_MICRO  0
 #define PM3DS_VSTR_(x)       #x
 #define PM3DS_VSTR(x)        PM3DS_VSTR_(x)
 #define PM3DS_VERSION_STR    PM3DS_VSTR(PM3DS_VERSION_MAJOR) "." PM3DS_VSTR(PM3DS_VERSION_MINOR) \

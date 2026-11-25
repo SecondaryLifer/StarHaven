@@ -1937,6 +1937,9 @@ void btl_state_update_victory(void) {
             } else {
                 currentEncounter->battleOutcome = OUTCOME_PLAYER_WON;
             }
+#ifdef _3DS
+            { extern void pm3ds_ach_battle_won(void); pm3ds_ach_battle_won(); }   // achievements.c
+#endif
             if (gBattleStatus.flags1 & BS_FLAGS1_DISABLE_CELEBRATION) {
                 if (!(gBattleStatus.flags2 & BS_FLAGS2_DONT_STOP_MUSIC)) {
                     bgm_set_song(0, AU_SONG_NONE, 0, 1500, VOL_LEVEL_FULL);
@@ -2123,6 +2126,16 @@ void btl_state_update_end_battle(void) {
             gBattleSubState = BTL_SUBSTATE_END_BATTLE_CLEANUP;
             // fallthrough
         case BTL_SUBSTATE_END_BATTLE_CLEANUP:
+#ifdef _3DS
+            if (encounterStatus->battleOutcome == OUTCOME_PLAYER_LOST && !(gBattleStatus.flags1 & BS_FLAGS1_NO_GAME_OVER)) {
+                // 3DS port: Retry battle or Game over? (n64_shim/retry_battle.c) The fight waits on
+                // its black screen while the choice is up
+                extern bool pm3ds_retry_wait_choice(void);
+                if (pm3ds_retry_wait_choice()) {
+                    break;
+                }
+            }
+#endif
             kill_all_scripts();
             for (i = 0; i < ARRAY_COUNT(battleStatus->enemyActors); i++) {
                 if (battleStatus->enemyActors[i] != nullptr) {
@@ -2153,9 +2166,17 @@ void btl_state_update_end_battle(void) {
                 decrement_status_bar_disabled();
             }
 
+#ifdef _3DS
+            extern bool pm3ds_retry_chosen(void);
+#endif
             if (encounterStatus->battleOutcome == OUTCOME_PLAYER_LOST &&
-                !(gBattleStatus.flags1 & BS_FLAGS1_NO_GAME_OVER))
-            {
+                !(gBattleStatus.flags1 & BS_FLAGS1_NO_GAME_OVER)
+#ifdef _3DS
+                // Retry battle: back to the map like any other fight's end, and the encounter
+                // starts this one again (src/encounter.c)
+                && !pm3ds_retry_chosen()
+#endif
+            ) {
                 s16 areaID;
                 s16 mapID;
 

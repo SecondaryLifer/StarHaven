@@ -88,6 +88,9 @@ void osContStartReadData(void *mq) {
     for (int k = 0; k < KEY_IDX_COUNT; k++) {
         if (!(kHeld & pm3ds_settings_key_bit(k))) continue;
         if (dpad_stick && (pm3ds_settings_key_bit(k) & dpad)) continue;
+        /* Select + R takes a screenshot (platform/pm3ds_screenshot.c): R held with
+         * Select would scroll a menu or swap Mario's and the partner's turns */
+        if (k == KEY_IDX_R && (kHeld & KEY_SELECT)) continue;
         b |= act_bits[pm3ds_cfg.keymap[k] % ACT_COUNT];
         turbo |= pm3ds_cfg.keymap[k] == ACT_TURBO_A;
     }

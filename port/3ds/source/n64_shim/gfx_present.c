@@ -326,10 +326,15 @@ static bool g_band_den;                   /* ...and its depth test, for draw_dec
 static GPU_TESTFUNC g_band_dfn;
 static GPU_WRITEMASK g_band_dm;
 /* one cache per setter (several call sites set the same state) */
+#ifdef PM3DS_NO_STATE_CACHE   /* debug A/B (hardware-only flicker): every setter reaches citro3d */
+#define FX_SKIP 0
+#else
+#define FX_SKIP 1
+#endif
 #define FX_CACHED(cache, call, n, ...) \
     do { \
         const int32_t v_[4] = { __VA_ARGS__ }; \
-        if ((cache).ep == g_fx_epoch && !memcmp((cache).a, v_, sizeof v_)) break; \
+        if (FX_SKIP && (cache).ep == g_fx_epoch && !memcmp((cache).a, v_, sizeof v_)) break; \
         (cache).ep = g_fx_epoch; memcpy((cache).a, v_, sizeof v_); \
         call; \
     } while (0)
@@ -417,7 +422,9 @@ static float combined_alpha_max(const gfx_state_t *st, bool two_cycle) {
 static struct { const C3D_Tex *tex; C3D_Tex copy; bool valid; } g_bound[3];
 void pm3ds_tex_bind(int unit, C3D_Tex *t) {
     if (unit >= 0 && unit < 3) {
+#ifndef PM3DS_NO_BIND_SKIP   /* debug A/B (hardware-only flicker): every bind reaches citro3d */
         if (g_bound[unit].valid && g_bound[unit].tex == t && !memcmp(&g_bound[unit].copy, t, sizeof *t)) return;
+#endif
         g_bound[unit].tex = t;
         g_bound[unit].copy = *t;
         g_bound[unit].valid = true;
@@ -425,6 +432,14 @@ void pm3ds_tex_bind(int unit, C3D_Tex *t) {
     C3D_TexBind(unit, t);
 }
 static void tex_bind_invalidate(void) { for (int i = 0; i < 3; i++) g_bound[i].valid = false; }
+/* t's texels are about to change on the GPU (a window drawn into it, a screen
+ * copy): its next bind must reach citro3d, whose bind also clears the PICA's
+ * texture cache. Skipped, the console samples the texels it cached from the
+ * last use (emulators keep no texture cache, so only hardware shows it). */
+static void tex_bind_forget(const C3D_Tex *t) {
+    for (int i = 0; i < 3; i++)
+        if (g_bound[i].tex == t) g_bound[i].valid = false;
+}
 
 /* N64 texel coordinates (s10.5, before the tile's shift) -> normalized GPU
  * texcoords are affine; work the factors out once per state change, so a
@@ -698,6 +713,9 @@ static void apply_state(gfx_state_t *st, bool rect) {
         /* a map model's decal also may not draw where the surface below is
          * farther away: see draw_decal_banded */
         g_batch_band = decal && st->decal_band && !g_in_rtt && !rect && zcmp && !keep_color;
+#ifdef PM3DS_NO_DECAL_BAND   /* debug A/B (GitHub #63 on hardware): decals without the stencil band */
+        g_batch_band = false;
+#endif
     }
 
     /* --- blend (the blender word that applies, see bsh) --- */
@@ -1091,6 +1109,7 @@ bool gfx_backend_rtt_begin(gfx_state_t *st, uint32_t addr, uint16_t width) {
     }
     gfx_backend_flush(st);
     C3D_FrameDrawOn(g_rtt_target); g_fx_epoch++;
+    tex_bind_forget(&g_rtt_tex);   /* this window replaces the last one's texels */
     C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, g_uloc_screen, &g_rtt_mtx);
     g_in_rtt = true;
     rtt_clear(st);
@@ -1152,6 +1171,7 @@ void gfx_backend_screen_copy(gfx_state_t *st, uint32_t addr, uint16_t width) {
                    (u32 *)g_scr_tex.data, GX_BUFFER_DIM(30 * 256 / 16, 2 * 256 / 16),
                    30 * 256 * 50, GX_TRANSFER_RAW_COPY(1));
     GPUCMD_AddWrite(GPUREG_FRAMEBUFFER_INVALIDATE, 1);
+    tex_bind_forget(&g_scr_tex);   /* new texels: the next bind clears the texture cache */
     g_scr_addr = addr;
     g_scr_stride = (uint32_t)width * 2u;
     g_scr_bytes = g_scr_stride * 240u;
@@ -1390,6 +1410,42 @@ static void render_lists(const void *const *lists, int nlists) {
 #if defined(PM3DS_DRAWLOG_ALLTRI) && defined(PM3DS_DRAWLOG_FRAME)
     { extern int pm3ds_gfx_dbg_vtx; if (g_frame_no == pm3ds_drawlog_frame) pm3ds_gfx_dbg_vtx = 400; }
 #endif
+#ifdef PM3DS_FRAME_DUMP
+    {   /* debug: the last PM3DS_FRAME_DUMP_N frames shown from frame PM3DS_FRAME_DUMP on, every
+         * one (60 fps in-between frames too), as 400x240 RGB565, appended to
+         * sdmc:/3ds/StarHaven/frames.raw */
+#ifndef PM3DS_FRAME_DUMP_N
+#define PM3DS_FRAME_DUMP_N 24
+#endif
+        static int dumped;
+        static bool prev_inb;   /* the frame on the target was an in-between one */
+        bool inb = prev_inb;
+        prev_inb = gfx_interp_in_between();
+        if (g_frame_no >= PM3DS_FRAME_DUMP && dumped < PM3DS_FRAME_DUMP_N) {
+            static uint16_t img[400 * 240];   /* the whole top screen, RGB565 */
+            uint32_t *tmp = (uint32_t *)linearAlloc(240 * 400 * 4);
+            if (tmp) {   /* as capture_frame */
+                C3D_SyncDisplayTransfer((u32 *)g_target->frameBuf.colorBuf, GX_BUFFER_DIM(240, 400), tmp, GX_BUFFER_DIM(240, 400),
+                                        GX_TRANSFER_FLIP_VERT(0) | GX_TRANSFER_OUT_TILED(0) | GX_TRANSFER_RAW_COPY(0) |
+                                        GX_TRANSFER_IN_FORMAT(GX_TRANSFER_FMT_RGBA8) | GX_TRANSFER_OUT_FORMAT(GX_TRANSFER_FMT_RGBA8) |
+                                        GX_TRANSFER_SCALING(GX_TRANSFER_SCALE_NO));
+                GSPGPU_InvalidateDataCache(tmp, 240 * 400 * 4);
+                for (int y = 0; y < 240; y++)
+                    for (int x = 0; x < 400; x++) {
+                        uint32_t p = tmp[x * 240 + (239 - y)];
+                        img[y * 400 + x] = (uint16_t)((((p >> 24) & 0xFF) >> 3) << 11 | (((p >> 16) & 0xFF) >> 2) << 5 |
+                                                      (((p >> 8) & 0xFF) >> 3));
+                    }
+                linearFree(tmp);
+            }
+            FILE *f = fopen("sdmc:/3ds/StarHaven/frames.raw", dumped ? "ab" : "wb");
+            if (f) { fwrite(img, 2, 400 * 240, f); fclose(f); }
+            pm3ds_log(PM3DS_LOG_INFO, "FRAMEDUMP %d (step frame %u, in-between %d)", dumped, (unsigned)g_frame_no,
+                      inb ? 1 : 0);
+            dumped++;
+        }
+    }
+#endif
     uint64_t t0 = svcGetSystemTick();
     /* C3D_FRAME_SYNCDRAW in two steps, so a hang report can tell a missing
      * vblank from a GPU that never finished the previous frame */
@@ -1541,7 +1597,9 @@ static void render_lists(const void *const *lists, int nlists) {
         extern bool pm3ds_new_game_picker_blocks_input(void);   /* the picker draws on the top screen too */
         if (hidKeysHeld() & KEY_TOUCH) touch_frames = 15;
         else if (touch_frames) touch_frames--;
-        if (!g_skip_auto || (bottom_n++ & (touch_frames ? 1 : 3)) == 0 || pm3ds_new_game_picker_blocks_input()) {
+        extern bool pm3ds_retry_prompt_up(void);   /* Retry battle's choice is on the top screen too (retry_battle.c) */
+        if (!g_skip_auto || (bottom_n++ & (touch_frames ? 1 : 3)) == 0 || pm3ds_new_game_picker_blocks_input()
+            || pm3ds_retry_prompt_up()) {
             GP_BEGIN(tb);
             PROF_PHASE(PH_BOTTOM);
             pm3ds_bottom_screen_render(g_target, stereo ? g_target_right : NULL);
@@ -1575,6 +1633,10 @@ static void render_lists(const void *const *lists, int nlists) {
     }
     C3D_FrameEnd(GX_CMDLIST_FLUSH);
     GP_END(te, GP_FRAMEEND);
+    {   /* Select + R: both screens to PNG files (platform/pm3ds_screenshot.c) */
+        extern void pm3ds_screenshot_after_frame(C3D_RenderTarget *top);
+        pm3ds_screenshot_after_frame(g_target);
+    }
     pm3ds_bc_main = "frame done";
     g_step_render_ticks += svcGetSystemTick() - t_busy;
     g_step_renders++;
